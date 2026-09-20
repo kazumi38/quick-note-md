@@ -29,8 +29,8 @@
 - [ ] T006 [P] `src/core.ts` の Todo 解析器に標準記法 `- [ ]` / `- [x]` / `- [X]` と unknown 判定を実装し、`src/test/core.test.ts` に対応ユニットテストを追加する
 - [ ] T007 [P] `src/documents.ts` に Todo 一意識別（`file path + line position`）検証を実装し、同文複数 Todo の誤更新防止テストを `src/test/documents.test.ts` に追加する
 - [ ] T008 `src/sidebar.ts` に未完了/完了の分離表示と未完了件数表示を実装し、表示更新テストを `src/test/sidebar.test.ts` に追加する
-- [ ] T009 [P] `src/extension.ts` にファイル作成/変更/削除/リネーム監視イベントからの再同期フローを実装し、監視イベントで一覧が更新されるテストを `src/test/extension.test.ts` に追加する
-- [ ] T010 `src/documents.ts` に読み取り専用・削除済み・移動済み検知時の中止とユーザー向けエラー文言を統一実装し、失敗時非破壊を `src/test/documents.test.ts` で検証する
+- [ ] T009 [P] `src/extension.ts` にファイル作成/変更/削除/リネーム監視イベントの**共通基盤再同期フロー**（イベント購読・再描画トリガ）を実装し、監視イベントで一覧が更新されるテストを `src/test/extension.test.ts` に追加する
+- [ ] T010 `src/documents.ts` に読み取り専用・削除済み・移動済み検知時の**共通失敗経路**（書き込み中止・非破壊・基本エラー文言）を実装し、失敗時非破壊を `src/test/documents.test.ts` で検証する
 
 **Checkpoint**: 安全な Markdown 更新、Todo 識別、一覧再同期、エラー処理の土台が揃い、各ストーリーを独立実装可能。
 
@@ -141,7 +141,7 @@
 
 - [ ] T039 [US5] ノートディレクトリ再帰走査と `.md` 一覧化を `src/documents.ts` の `list` に実装する
 - [ ] T040 [US5] メモ選択時に標準 VS Code テキストエディタを開く動作を `src/extension.ts` の `quick-note-md.openMemo` に実装する
-- [ ] T041 [US5] 直接編集・外部変更・削除/移動を次回表示で反映する再同期処理を `src/extension.ts` の watcher と `src/sidebar.ts` の refresh に実装する
+- [ ] T041 [US5] T009 の共通基盤を利用し、US5 向けに**直接編集後の次回表示反映**（`src/sidebar.ts` の memo refresh と `src/extension.ts` のメモ表示導線連携）を実装する
 
 **Checkpoint**: US5 単体で一覧表示と通常編集反映を検証可能。
 
@@ -152,10 +152,12 @@
 **Purpose**: 全ストーリー横断の品質・安全性・運用性を仕上げる。
 
 - [ ] T042 [P] 失敗時メッセージをユーザー向け表現へ統一し、部分更新なしを担保する実装を `src/extension.ts` と `src/documents.ts` で見直す
-- [ ] T043 [P] `TodoSourceFile` 制約「新規 Todo 追加時に既定ファイルが無ければ自動作成（FR-027）」「削除・移動・権限不足を検知した場合は書き込みせず失敗を返す（FR-021）」を `src/test/documents.test.ts` で網羅する
+- [ ] T043 [P] T010 の共通失敗経路を前提に、`TodoSourceFile` 制約「新規 Todo 追加時に既定ファイルが無ければ自動作成（FR-027）」「削除・移動・権限不足を検知した場合は書き込みせず失敗を返す（FR-021）」の**Todo 固有ケース**を `src/test/documents.test.ts` で網羅する
 - [ ] T044 [P] quickstart 検証シナリオに合わせて手動確認項目を更新し `specs/001-memo-todo-management/quickstart.md` を最終化する
 - [ ] T045 `npm run lint && npm run compile && npm test` を実行し、結果を `specs/001-memo-todo-management/quickstart.md` の検証ログ節に反映する
 - [ ] T046 README の利用説明を仕様 001 の確定挙動へ合わせて更新し `/home/runner/work/quick-note-md/quick-note-md/README.md` に反映する
+- [ ] T047 [P] SC-005 検証として 1,000 行規模 Markdown fixture を用いた操作応答（メモを開く・追記する・Todo を完了する）の回帰テストを `src/test/documents.test.ts` と `src/test/extension.test.ts` に追加する
+- [ ] T048 [P] FR-022/SC-006 検証として拡張無効状態でも Markdown が可読・編集可能である手動検証手順を `specs/001-memo-todo-management/quickstart.md` に追加し、README 参照を `/home/runner/work/quick-note-md/quick-note-md/README.md` に追記する
 
 ---
 
@@ -195,7 +197,7 @@
 - **US3**: T024, T025, T026, T027
 - **US4**: T032, T033
 - **US5**: T037, T038
-- **Polish**: T042, T043, T044
+- **Polish**: T042, T043, T044, T047, T048
 
 ---
 
