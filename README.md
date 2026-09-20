@@ -1,71 +1,110 @@
-# quick-note-md README
+# QuickNoteMD
 
-This is the README for your extension "quick-note-md". After writing up a brief description, we recommend including the following sections.
+VS Code のサイドバーから、Markdown メモと Todo を管理する拡張機能です。
+データは通常の `.md` ファイルだけに保存され、拡張機能なしでも編集できます。
 
-## Features
+## 使い方
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+1. フォルダーを開き、アクティビティバーの **QuickNoteMD** を選択します。
+2. **メモ** の「新規メモ」でタイトルを入力します。同名の場合は連番が付きます。
+3. メモを選択して閲覧し、項目の「メモに追記」で短いテキストを末尾に追加します。
+4. **Todo** の「新規 Todo」で項目を追加します。保存先は `notes/todo.md` です。
+5. チェックアイコンで完了、再開アイコンで未完了に戻せます。「ステータスを変更」から他の状態も選択できます。
 
-For example if there is an image subfolder under your extension project workspace:
+Todo の項目選択で元の Markdown 行を開きます。削除には確認が必要です。
+操作はコマンドパレットの `QuickNoteMD:` からも実行できます。
+未選択の場合は、開いているメモまたはサイドバーの選択項目を利用します。
 
-\!\[feature X\]\(images/feature-x.png\)
+## 表示と直接編集
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+メモは既定でレンダリング表示になります。エディタの「表示モードを切り替え」で、
+同じ文書の生 Markdown 表示と切り替えられます。
+新規メモも設定された既定モードで開き、ファイル別の表示履歴は保存しません。
+他の Markdown ファイルの標準エディタ関連付けは変更しません。
 
-## Requirements
+レンダリング表示では、編集可能として示された段落・見出し・平坦なリストの
+テキスト部分を直接編集できます。強調記号や Todo の状態を残して、対象範囲だけを更新します。
+テーブル、コードブロック、画像、複雑な構造などは直接編集せず、生 Markdown 表示を利用してください。
+複数行の追記や構造の変更も生 Markdown 表示で行います。
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+外部 HTML・スクリプトやリモート画像は実行・読み込みしません。
+キーボードで編集箇所へ移動でき、状態は色だけでなくラベルでも確認できます。
 
-## Extension Settings
+## Todo の記法
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+| 状態 | Markdown | 意味 |
+|---|---|---|
+| 未完了 | `- [ ] 本文` | 未対応 |
+| 完了 | `- [x] 本文` | 対応済み（`[X]` も認識） |
+| Note | `- [n] 本文` | 参考記録 |
+| Skip | `- [-] 本文` | 対応しない |
+| Warn | `- [!] 本文` | 注意が必要な未解決 |
+| IMP | `- [i] 本文` | 重要な未解決 |
 
-For example:
+すべての状態間を自由に変更できます。IMP を先頭に表示し、完了グループは初期状態で折りたたみます。
+未解決件数は **未完了・Warn・IMP** の合計です。自動通知・自動アーカイブは行いません。
 
-This extension contributes the following settings:
+管理対象ディレクトリ内のメモに含まれる Todo も一覧に表示します。
+コードブロック内の例は Todo に含めません。未知・壊れた記法は読み取り専用の
+「認識できない Todo」として扱い、ソースで修正します。
+拡張記号の意味は一般の Markdown ビューアでは解釈されませんが、文字として残ります。
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+## 設定
 
-## Known Issues
+| 設定 | 既定値 | 説明 |
+|---|---|---|
+| `quick-note-md.notesDirectory` | `notes` | 最初のワークスペースフォルダー内の相対ディレクトリ |
+| `quick-note-md.defaultView` | `rendered` | `rendered`（レンダリング）または `source`（生 Markdown） |
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+サブディレクトリを含む Markdown を検出します。絶対パス、親ディレクトリへの移動、
+シンボリックリンク経由の操作は許可しません。
+設定変更で監視対象を更新しますが、既存ファイルの移動はしません。
+マルチルートでは最初のフォルダーだけを対象とします。
 
-## Release Notes
+## データ保護と操作契約
 
-Users appreciate release notes as you update your extension.
+- 同じファイルへの拡張機能経由の変更を直列化し、既存の改行と対象外の本文を保持します。
+- Todo の識別はファイル・行位置・文書バージョン・変更前の行で行い、同文の別項目を変更しません。
+- 未保存の通常編集がある場合、サイドバーからの変更は保存後に再実行してください。
+- レンダリング編集は同じ TextDocument を使います。既に未保存の変更があるときは自動保存せず、変更を保持します。
+- 競合時は古い位置に上書きせず、警告します。内容を確認し、再読み込みしてから再操作してください。
+- 保存に失敗した場合、編集内容は未保存の文書に残ります。生 Markdown を開き、内容を退避して権限や保存先を確認してください。
+- 文書にまだ反映できない入力は、復旧欄からコピーできます。表示切替後も同じ拡張機能セッション内で保持しますが、VS Code を終了する前に必ず回収してください。
+- 読み取り専用・削除済み・移動済みファイルへの変更は中止します。
+- 標準の保存、Undo／Redo を利用できます。外部プロセスとの排他ロックや共同編集は提供しません。
 
-### 1.0.0
+Webview からの編集要求は要求 ID・文書バージョン・編集対象・変更前後のテキストで識別します。
+拡張機能側で編集可能範囲を再検証し、Webview に任意のファイルを書かせません。
+成功時は新しい文書バージョンを返し、競合・編集対象外・保存失敗は成功と区別して通知します。
 
-Initial release of ...
+Markdown の解析・表示には `markdown-it` を使用します。独自パーサーや全面的な
+リッチテキスト編集基盤は導入せず、解析結果と元ソースが対応する範囲だけを編集可能にしています。
+標準プレビューでは表示中の直接編集を提供できないため、CustomTextEditorProvider を使用します。
 
-### 1.0.1
+## 開発と検証
 
-Fixed issue #.
+`package.json` の VS Code エンジン要件を満たす環境で実行してください。
 
-### 1.1.0
+```sh
+npm ci
+npm run lint
+npm run compile
+npm test
+```
 
-Added features X, Y, and Z.
+`npm test` は既存の VS Code テストホストを使用し、事前にテストのコンパイル・ビルド・lint を実行します。
+初回は VS Code のダウンロードにネットワーク接続が必要です。
+Linux のヘッドレス環境ではディスプレイ（例: Xvfb）が必要です。
+F5 で拡張機能開発ホストを起動して、次を手動確認できます。
 
----
+- 新規メモ、同名メモ、10 回の連続追記で本文の欠落や上書きがないこと。
+- 全 6 状態の Todo を作成し、変更時に記号以外が変わらないこと。削除キャンセルで変化しないこと。
+- 直接編集・表示切替・保存・Undo／Redo と、日本語 IME 入力。
+- LF／CRLF、同文 Todo、未知記法、コードブロック、外部変更・削除・権限エラー。
+- 生 Markdown とレンダリング表示を同時に開き、競合時に入力が黙って消えないこと。
+- 約 1,000 行のメモで操作応答を確認し、Windows・macOS・Linux のキーボードとスクリーンリーダーで確認すること。
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+設計の基準は [001 仕様](specs/001-memo-todo-management/spec.md)、
+[002 仕様](specs/002-note-render-todo-status/spec.md) と
+[憲章](.specify/memory/constitution.md) です。002 の限定的な直接編集が、
+001 の標準エディタ限定方針を拡張します。生 Markdown への切り替えは常に残します。

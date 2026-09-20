@@ -1,0 +1,46 @@
+body {
+	color: var(--vscode-editor-foreground);
+	background: var(--vscode-editor-background);
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size);
+	line-height: 1.6;
+	max-width: 960px;
+	margin: 0 auto;
+	padding: 16px 24px 64px;
+}
+header { border-bottom: 1px solid var(--vscode-panel-border); margin-bottom: 24px; }
+button {
+	color: var(--vscode-button-foreground);
+	background: var(--vscode-button-background);
+	border: 1px solid transparent;
+	padding: 5px 10px;
+	margin: 4px 8px 4px 0;
+	cursor: pointer;
+}
+button:hover { background: var(--vscode-button-hoverBackground); }
+button:focus-visible, textarea:focus-visible, .editable:focus {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+#help { font-size: .9em; }
+#status { min-height: 1.6em; }
+#status.warning { color: var(--vscode-editorWarning-foreground); font-weight: bold; }
+.editable { border-bottom: 1px dotted var(--vscode-descriptionForeground); white-space: pre-wrap; }
+.editable:empty::before { content: "本文を入力"; color: var(--vscode-descriptionForeground); }
+.editable:empty { display: inline-block; min-width: 5em; }
+.link { text-decoration: underline; color: var(--vscode-textLink-foreground); }
+.image { font-style: italic; }
+pre { overflow: auto; padding: 12px; background: var(--vscode-textCodeBlock-background); }
+code { font-family: var(--vscode-editor-font-family); }
+blockquote { border-left: 3px solid var(--vscode-textBlockQuote-border); padding-left: 16px; }
+table { border-collapse: collapse; }
+td, th { border: 1px solid var(--vscode-panel-border); padding: 4px 8px; }
+textarea {
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 100px;
+	color: var(--vscode-input-foreground);
+	background: var(--vscode-input-background);
+}
+[hidden] { display: none !important; }
