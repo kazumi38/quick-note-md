@@ -78,7 +78,7 @@ suite('Extension commands', () => {
 		assert.deepStrictEqual(await store.todos(), []);
 	});
 
-	test('appendMemo safely rejects non-managed files', async () => {
+	test('appendMemo safely rejects non-managed files and missing selection', async () => {
 		const errors: string[] = [];
 		queueInput('追記不可');
 		patchWindow('showErrorMessage', (async (message: string) => {
@@ -92,7 +92,9 @@ suite('Extension commands', () => {
 			await vscode.commands.executeCommand('quick-note-md.appendMemo', uri);
 			const text = await vscode.workspace.openTextDocument(uri);
 			assert.strictEqual(text.getText(), '# External\n');
-			assert.ok(errors.some(message => message.includes('ノート保存先の Markdown メモを選択してください。')));
+			await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+			await vscode.commands.executeCommand('quick-note-md.appendMemo');
+			assert.strictEqual(errors.filter(message => message.includes('ノート保存先の Markdown メモを選択してください。')).length, 2);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
