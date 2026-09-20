@@ -31,6 +31,22 @@ suite('Markdown core', () => {
 		assert.deepStrictEqual(parseTodos(''), []);
 	});
 
+	test('missing list spacing is unknown, while Markdown links and code remain excluded', () => {
+		const todos = parseTodos('-[ ] broken\n- [label](url)\n- [label][reference]\n- [label]: url\n\n```\n-[ ] fenced\n```\n\n    -[ ] indented\n\n-[x] broken too');
+		assert.deepStrictEqual(todos.map(todo => [todo.line, todo.status, todo.raw]), [
+			[0, 'unknown', '-[ ] broken'],
+			[11, 'unknown', '-[x] broken too'],
+		]);
+	});
+
+	test('shortcut reference links are not unknown Todos but task text may contain links', () => {
+		const todos = parseTodos('- [release]\n\n[release]: https://example.com\n\n- [ ] [link](https://example.com)\n- [x] [release]');
+		assert.deepStrictEqual(todos.map(todo => [todo.line, todo.status, todo.text]), [
+			[4, 'open', '[link](https://example.com)'],
+			[5, 'done', '[release]'],
+		]);
+	});
+
 	for (const eol of ['\n', '\r\n']) {
 		test(`append only returns suffix preserving ${JSON.stringify(eol)}`, () => {
 			assert.strictEqual(appendText('', 'first', eol), `first${eol}`);
@@ -44,7 +60,7 @@ suite('Markdown core', () => {
 
 	test('appending to a final non-newline row and invalid inputs', () => {
 		assert.strictEqual(appendText('existing', 'new'), '\nnew\n');
-		for (const input of ['', '  ', 'a\nb', 'a\rb']) { assert.throws(() => appendText('', input)); }
+		for (const input of ['', '  ', 'a\nb', 'a\rb', 'a\u0000b']) { assert.throws(() => appendText('', input)); }
 		assert.throws(() => appendText('', 'a', '\r'));
 	});
 

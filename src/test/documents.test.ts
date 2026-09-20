@@ -1,18 +1,17 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { chmod, symlink } from 'fs/promises';
-import { join, resolve } from 'path';
+import { chmod, mkdtemp, realpath, symlink } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import { DocumentStore } from '../documents';
 
 suite('DocumentStore integration', () => {
 	let root: vscode.Uri;
 	let store: DocumentStore;
-	let sequence = 0;
 
 	setup(async () => {
-		root = vscode.Uri.file(resolve(__dirname, '../../.test-documents', `${Date.now()}-${sequence++}`));
+		root = vscode.Uri.file(await realpath(await mkdtemp(join(tmpdir(), 'quick-note-documents-'))));
 		store = new DocumentStore(() => root);
-		await vscode.workspace.fs.createDirectory(root);
 	});
 
 	teardown(async () => {
@@ -151,6 +150,33 @@ suite('DocumentStore integration', () => {
 		assert.strictEqual(await read(ref.uri), '- [ ] original\n');
 	});
 
+	test('external disk changes are not overwritten by a stale Todo operation', async () => {
+		await store.createTodo('original');
+		const ref = (await store.todos())[0];
+		await write(ref.uri, '- [ ] external change\n');
+		await assert.rejects(store.setStatus(ref, 'done'));
+		assert.strictEqual(await read(ref.uri), '- [ ] external change\n');
+	});
+
+	test('edits during save are reported as conflicts rather than acknowledged as our version', async () => {
+		await store.createTodo('original');
+		const ref = (await store.todos())[0];
+		const document = await vscode.workspace.openTextDocument(ref.uri);
+		let changed = false;
+		const listener = vscode.workspace.onWillSaveTextDocument(event => {
+			if (event.document.uri.toString() === ref.uri.toString() && !changed) {
+				changed = true;
+				event.waitUntil(Promise.resolve([vscode.TextEdit.insert(new vscode.Position(1, 0), 'concurrent change\n')]));
+			}
+		});
+		try {
+			await assert.rejects(store.edit(ref.uri, ref.version, 6, 14, 'original', 'edited'), /変更/);
+			assert.strictEqual(changed, true);
+			assert.strictEqual(document.getText(), '- [ ] edited\nconcurrent change\n');
+			assert.strictEqual(await read(ref.uri), document.getText());
+		} finally { listener.dispose(); }
+	});
+
 	test('deleted files with dirty editor contents are not recreated or silently saved', async () => {
 		await store.createTodo('original');
 		const uri = vscode.Uri.joinPath(root, 'todo.md');
@@ -177,5 +203,18 @@ suite('DocumentStore integration', () => {
 		const throughRoot = new DocumentStore(() => vscode.Uri.joinPath(root, 'cycle'));
 		await assert.rejects(throughRoot.list());
 		assert.strictEqual(await read(actual), '# actual\n');
+	});
+
+	test('platform-style symlink ancestors outside the configured root are allowed', async function () {
+		if (process.platform === 'win32') { this.skip(); }
+		const parent = vscode.Uri.joinPath(root, 'actual-parent');
+		const managed = vscode.Uri.joinPath(parent, 'notes');
+		await vscode.workspace.fs.createDirectory(managed);
+		const link = vscode.Uri.joinPath(root, 'parent-link');
+		await symlink(parent.fsPath, link.fsPath);
+		const throughAncestor = new DocumentStore(() => vscode.Uri.joinPath(link, 'notes'));
+		await throughAncestor.createTodo('allowed');
+		assert.strictEqual(await read(vscode.Uri.joinPath(managed, 'todo.md')), '- [ ] allowed\n');
+		assert.strictEqual((await throughAncestor.todos()).length, 1);
 	});
 });

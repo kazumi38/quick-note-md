@@ -1,5 +1,8 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { directorySegments } from '../configuration';
 import { statusInfo } from '../core';
 import { TodoRef } from '../documents';
@@ -69,5 +72,20 @@ suite('Sidebar and settings', () => {
 		assert.strictEqual(extension.packageJSON.contributes.customEditors[0].priority, 'option');
 		assert.strictEqual(extension.packageJSON.contributes.configuration.properties['quick-note-md.defaultView'].default,
 			'rendered');
+	});
+
+	test('source fallback remains available outside the managed directory', async () => {
+		const extension = vscode.extensions.all.find(item => item.packageJSON.name === 'quick-note-md');
+		assert.ok(extension);
+		await extension.activate();
+		const directory = await mkdtemp(join(tmpdir(), 'quick-note-source-'));
+		const uri = vscode.Uri.file(join(directory, 'external.md'));
+		try {
+			await writeFile(uri.fsPath, '# External\n');
+			await vscode.commands.executeCommand('quick-note-md.showSource', uri);
+			assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), uri.toString());
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 });

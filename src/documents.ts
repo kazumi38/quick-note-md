@@ -36,13 +36,14 @@ export class DocumentStore {
 			throw new Error('保存先フォルダーの外は変更できません。');
 		}
 		let last: vscode.FileStat | undefined;
-		const parts = uri.path.split('/').filter(Boolean);
-		for (let index = 0; index < parts.length; index++) {
-			const current = uri.with({ path: '/' + parts.slice(0, index + 1).join('/') });
+		const parts = relative.split('/').filter(Boolean);
+		// Ancestors of the configured root may legitimately be platform symlinks (for example /var on macOS).
+		for (let index = 0; index <= parts.length; index++) {
+			const current = vscode.Uri.joinPath(root, ...parts.slice(0, index));
 			try {
 				last = await vscode.workspace.fs.stat(current);
 				if (last.type & vscode.FileType.SymbolicLink) { throw new Error('シンボリックリンクは使用できません。'); }
-				if (index < parts.length - 1 && !(last.type & vscode.FileType.Directory)) {
+				if (index < parts.length && !(last.type & vscode.FileType.Directory)) {
 					throw new Error('保存先の親がフォルダーではありません。');
 				}
 			} catch (error) {
@@ -88,7 +89,7 @@ export class DocumentStore {
 			for (const [name, type] of await vscode.workspace.fs.readDirectory(directory)) {
 				if (type & vscode.FileType.SymbolicLink) { continue; }
 				const uri = vscode.Uri.joinPath(directory, name);
-				const info = await this.guard(uri);
+				const info = await this.guard(uri, true);
 				if (!info) { continue; }
 				if (info.type & vscode.FileType.Directory) { await visit(uri); }
 				else if ((info.type & vscode.FileType.File) && /\.md$/i.test(name)) {
@@ -118,6 +119,9 @@ export class DocumentStore {
 		edit.insert(uri, new vscode.Position(0, 0), text);
 		if (!await vscode.workspace.applyEdit(edit)) { throw new Error('ファイルを作成できませんでした。同名ファイルや権限を確認してください。'); }
 		const document = await vscode.workspace.openTextDocument(uri);
+		if (document.getText() !== text.replace(/\r\n|\r|\n/g, document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n')) {
+			throw new Error('作成中に別の変更がありました。入力を保持したまま保存を中止しました。');
+		}
 		await this.save(document);
 	}
 
@@ -234,12 +238,18 @@ export class DocumentStore {
 		edit.replace(document.uri, new vscode.Range(document.positionAt(start), document.positionAt(end)), text);
 		if (!await vscode.workspace.applyEdit(edit)) { throw new Error('編集を適用できませんでした。'); }
 		const normalizedText = text.replace(/\r\n|\r|\n/g, document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n');
-		if (document.getText() !== content.slice(0, start) + normalizedText + content.slice(end)) {
+		const expected = content.slice(0, start) + normalizedText + content.slice(end);
+		const expectedVersion = document.version === version + 1 || (expected === content && document.version === version);
+		if (!expectedVersion || document.getText() !== expected) {
 			throw new Error('編集中に別の変更がありました。入力を保持したまま保存を中止しました。Markdown を確認してください。');
 		}
+		const appliedVersion = document.version;
 		if (retainDirty) {
 			void vscode.window.showWarningMessage('未保存の変更を保持しています。Markdown を確認して保存してください。');
 		} else { await this.save(document); }
-		return document.version;
+		if (document.version !== appliedVersion || document.getText() !== expected) {
+			throw new Error('保存中に別の変更がありました。最新の Markdown を確認してから編集してください。');
+		}
+		return appliedVersion;
 	}
 }

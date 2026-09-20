@@ -31,23 +31,29 @@ markers.set('X', 'done');
 export function parseTodos(text: string): ParsedTodo[] {
 	const lines = text.split(/\r\n|\n|\r/);
 	const listLines = new Set<number>();
+	const linkedLines = new Set<number>();
 	const excluded = new Set<number>();
 	for (const token of markdown.parse(text, {})) {
 		if (!token.map) { continue; }
 		if (token.type === 'list_item_open') { listLines.add(token.map[0]); }
+		if (token.type === 'inline' && token.children?.[0]?.type === 'link_open') { linkedLines.add(token.map[0]); }
 		if (token.type === 'fence' || token.type === 'code_block' || token.type === 'html_block') {
 			for (let line = token.map[0]; line < token.map[1]; line++) { excluded.add(line); }
 		}
 	}
 	const todos: ParsedTodo[] = [];
-	for (const line of [...listLines].sort((a, b) => a - b)) {
+	for (let line = 0; line < lines.length; line++) {
 		if (excluded.has(line)) { continue; }
 		const raw = lines[line];
 		// Source prefixes are deliberately conservative: quoted or lazy-continuation rows are not edited.
-		const prefix = /^([ \t]*(?:[-+*]|\d+[.)])[ \t]+)(\[.*)$/.exec(raw);
+		const prefix = /^([ \t]*(?:[-+*]|\d+[.)])[ \t]*)(\[.*)$/.exec(raw);
 		if (!prefix) { continue; }
+		if (/^\[[^\]]*\](?:\(|\[|:)/.test(prefix[2])) { continue; }
 		const markerStart = prefix[1].length;
-		const valid = /^\[([ xXn!i-])\](?:[ \t]+(.*)|$)$/.exec(prefix[2]);
+		const valid = listLines.has(line) && /[ \t]$/.test(prefix[1])
+			? /^\[([ xXn!i-])\](?:[ \t]+(.*)|$)$/.exec(prefix[2])
+			: null;
+		if (!valid && linkedLines.has(line)) { continue; }
 		todos.push({
 			line,
 			raw,
@@ -71,7 +77,7 @@ export function safeFileName(title: string): string {
 }
 
 export function validateInput(input: string): void {
-	if (!input.trim() || /[\r\n]/.test(input)) {
+	if (!input.trim() || /[\r\n\u0000]/.test(input)) {
 		throw new Error('空白以外を含む1行のテキストを入力してください。');
 	}
 }

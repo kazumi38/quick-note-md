@@ -11,6 +11,16 @@ export interface EditableSpan {
 export interface RenderedNote {
 	html: string;
 	spans: EditableSpan[];
+	nodes: RenderedNode[];
+}
+
+export interface RenderedNode {
+	tag?: string;
+	text?: string;
+	children?: RenderedNode[];
+	blockId?: string;
+	className?: string;
+	start?: string;
 }
 
 export const maxEditLength = 65536;
@@ -38,12 +48,52 @@ markdown.renderer.rules.text = (tokens, index) => {
 	return `<span class="editable" contenteditable="plaintext-only" role="textbox" tabindex="0" spellcheck="false" aria-label="本文を編集" data-block-id="${span.id}">${escapeHtml(token.content)}</span>`;
 };
 
+function renderedNodes(tokens: ReturnType<typeof markdown.parse>): RenderedNode[] {
+	const root: RenderedNode[] = [];
+	const stack = [root];
+	for (const token of tokens) {
+		if (token.hidden) { continue; }
+		const children = stack[stack.length - 1];
+		if (token.type === 'inline') {
+			children.push(...renderedNodes(token.children ?? []));
+		} else if (token.type === 'text') {
+			const span = token.meta as EditableSpan | null;
+			children.push(span
+				? { tag: 'span', blockId: span.id, children: [{ text: token.content }] }
+				: { text: token.content });
+		} else if (token.type === 'image') {
+			children.push({ tag: 'span', className: 'image', children: [{ text: `画像: ${token.content}` }] });
+		} else if (token.type === 'fence' || token.type === 'code_block') {
+			children.push({ tag: 'pre', children: [{ tag: 'code', children: [{ text: token.content }] }] });
+		} else if (token.type === 'code_inline') {
+			children.push({ tag: 'code', children: [{ text: token.content }] });
+		} else if (token.type === 'softbreak') {
+			children.push({ text: '\n' });
+		} else if (token.nesting === 1) {
+			const node: RenderedNode = { tag: token.tag, children: [] };
+			if (token.type === 'link_open') { node.tag = 'span'; node.className = 'link'; }
+			const start = token.attrGet('start');
+			if (token.tag === 'ol' && start) { node.start = start; }
+			children.push(node);
+			stack.push(node.children!);
+		} else if (token.nesting === -1) {
+			stack.pop();
+		} else if (token.type === 'hardbreak' || token.type === 'hr') {
+			children.push({ tag: token.tag });
+		} else {
+			children.push({ text: token.content });
+		}
+	}
+	return root;
+}
+
 export function renderNote(source: string): RenderedNote {
 	if (source === '') {
 		const span: EditableSpan = { id: '0:0', start: 0, end: 0, text: '', kind: 'paragraph' };
 		return {
 			html: '<p><span class="editable" contenteditable="plaintext-only" role="textbox" tabindex="0" aria-label="本文を編集" data-block-id="0:0"></span></p>',
-			spans: [span]
+			spans: [span],
+			nodes: [{ tag: 'p', children: [{ tag: 'span', blockId: span.id, children: [{ text: '' }] }] }]
 		};
 	}
 	const tokens = markdown.parse(source, {});
@@ -172,7 +222,7 @@ export function renderNote(source: string): RenderedNote {
 			spans.push(...candidates);
 		}
 	}
-	return { html: markdown.renderer.render(tokens, markdown.options, {}), spans };
+	return { html: markdown.renderer.render(tokens, markdown.options, {}), spans, nodes: renderedNodes(tokens) };
 }
 
 export function validateRenderedEdit(

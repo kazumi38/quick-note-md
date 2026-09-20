@@ -23,11 +23,11 @@ export function activate(context: vscode.ExtensionContext): void {
 			}
 		}));
 	};
-	const memoUri = (item?: unknown): vscode.Uri => {
+	const memoUri = (item?: unknown, requireManaged = true): vscode.Uri => {
 		const uri = item instanceof MemoNode ? item.uri : item instanceof TodoNode ? item.todo.uri
 			: item instanceof vscode.Uri ? item : editor.activeUri ?? vscode.window.activeTextEditor?.document.uri
 				?? sidebar.memoView.selection[0]?.uri;
-		if (!uri || !isManaged(uri)) {
+		if (!uri || (requireManaged && !isManaged(uri))) {
 			throw new Error('ノート保存先の Markdown メモを選択してください。');
 		}
 		return uri;
@@ -87,7 +87,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		}
 	});
 	register('showSource', async item => {
-		const uri = memoUri(item);
+		const uri = memoUri(item, false);
 		await open(uri, 'source');
 		if (item instanceof TodoNode) {
 			const document = await vscode.workspace.openTextDocument(uri);
@@ -97,7 +97,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		}
 	});
 	register('showRendered', async item => open(memoUri(item), 'rendered'));
-	register('toggleView', async item => open(memoUri(item), editor.activeUri ? 'source' : 'rendered'));
+	register('toggleView', async item => open(memoUri(item, !editor.activeUri), editor.activeUri ? 'source' : 'rendered'));
 	register('refresh', async () => sidebar.refresh());
 
 	let watcher: vscode.FileSystemWatcher | undefined;

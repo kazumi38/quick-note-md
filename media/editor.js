@@ -11,6 +11,8 @@
 	let inFlight;
 	let composing = false;
 	let conflicted = false;
+	let reloadRequested = false;
+	let readonlyReason;
 	let requestId = 0;
 	let timer;
 	const restored = vscode.getState();
@@ -24,10 +26,20 @@
 		status.textContent = text;
 		status.classList.toggle('warning', warning);
 	}
+	function savedMessage() {
+		if (readonlyReason) { message(readonlyReason, true); return; }
+		message(snapshot?.isDirty
+			? '本文に反映しました。既存の未保存変更は生 Markdown で確認して保存してください。'
+			: '保存済み。', Boolean(snapshot?.isDirty));
+	}
+	function persist(text) {
+		vscode.setState(text === null ? {} : { pending: text });
+		vscode.postMessage({ kind: 'pending', text });
+	}
 	function preserve() {
 		if (dirty) {
 			pending.value = dirty.element.textContent.slice(0, maxLength);
-			vscode.setState({ pending: pending.value });
+			persist(pending.value);
 			recovery.hidden = false;
 		}
 	}
@@ -37,11 +49,45 @@
 		preserve();
 		message(text, true);
 	}
+	function renderNodes(nodes) {
+		const allowed = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'strong',
+			'em', 's', 'span', 'pre', 'code', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'br', 'hr']);
+		function copy(node) {
+			if (typeof node.text === 'string') { return document.createTextNode(node.text); }
+			if (!allowed.has(node.tag)) {
+				return document.createTextNode('');
+			}
+			const element = document.createElement(node.tag);
+			if (node.tag === 'span') {
+				const id = node.blockId;
+				if (/^\d+:\d+$/.test(id || '')) {
+					element.className = 'editable';
+					element.dataset.blockId = id;
+					element.setAttribute('contenteditable', 'plaintext-only');
+					element.setAttribute('role', 'textbox');
+					element.setAttribute('aria-label', '本文を編集');
+					element.setAttribute('tabindex', '0');
+					element.setAttribute('spellcheck', 'false');
+				} else if (['link', 'image'].includes(node.className)) {
+					element.className = node.className;
+				}
+			}
+			if (node.tag === 'ol' && /^\d+$/.test(node.start || '')) {
+				element.setAttribute('start', node.start);
+			}
+			for (const child of node.children || []) { element.appendChild(copy(child)); }
+			return element;
+		}
+		note.replaceChildren(...nodes.map(copy));
+	}
 	function applySnapshot(next) {
 		snapshot = next;
-		note.innerHTML = next.html;
-		message(recovered ? '前の未保存入力を復元しました。コピーして保管してください。'
-			: '保存済み。本文をクリック、または Tab キーで編集できます。', recovered);
+		renderNodes(next.nodes);
+		if (recovered) {
+			message('前の未保存入力を復元しました。コピーして保管してください。', true);
+		} else {
+			savedMessage();
+		}
 	}
 	function commit() {
 		clearTimeout(timer);
@@ -49,8 +95,8 @@
 		const text = dirty.element.textContent;
 		if (text === dirty.before) {
 			dirty = undefined;
-			vscode.setState({});
-			message('保存済み。');
+			persist(null);
+			savedMessage();
 			return;
 		}
 		if (text.length > maxLength) {
@@ -77,7 +123,7 @@
 			if (!span) { return; }
 			dirty = { id: span.id, before: span.text, element };
 		}
-		vscode.setState({ pending: element.textContent.slice(0, maxLength) });
+		persist(element.textContent.slice(0, maxLength));
 		if (conflicted) { preserve(); return; }
 		message('未保存の入力があります。');
 		clearTimeout(timer);
@@ -176,6 +222,7 @@
 			message('未保存の入力があります。コピーするか、明示的に破棄してください。', true);
 		} else {
 			conflicted = false;
+			reloadRequested = true;
 			vscode.postMessage({ kind: 'reload' });
 		}
 	});
@@ -189,12 +236,22 @@
 		recovered = false;
 		recovery.hidden = true;
 		pending.value = '';
-		vscode.setState({});
+		persist(null);
+		reloadRequested = true;
 		vscode.postMessage({ kind: 'reload' });
 	});
 	window.addEventListener('message', event => {
 		const next = event.data;
-		if (next.kind === 'snapshot') {
+		if (next.kind === 'recovery' && typeof next.text === 'string' && !dirty) {
+			recovered = true;
+			pending.value = next.text.slice(0, maxLength);
+			recovery.hidden = false;
+			vscode.setState({ pending: pending.value });
+			message('前の未保存入力を復元しました。コピーして保管してください。', true);
+		} else if (next.kind === 'notice') {
+			readonlyReason = next.message;
+			message(next.message, true);
+		} else if (next.kind === 'snapshot') {
 			if (dirty || inFlight || composing) {
 				if (snapshot && next.version !== snapshot.version) {
 					conflict('別の操作で内容が変わりました。入力を保持しています。コピーしてから再読み込みしてください。');
@@ -202,7 +259,12 @@
 				return;
 			}
 			// Keep the focused leaf and caret when an unchanged snapshot arrives.
-			if (snapshot && snapshot.version === next.version) { return; }
+			if (snapshot && snapshot.version === next.version && !reloadRequested) {
+				snapshot = next;
+				if (!recovered) { savedMessage(); }
+				return;
+			}
+			reloadRequested = false;
 			applySnapshot(next);
 		} else if (next.kind === 'ack' && inFlight && next.requestId === inFlight.id) {
 			const saved = inFlight.text;
@@ -214,13 +276,13 @@
 				if (!composing) { timer = setTimeout(commit, 450); }
 				return;
 			}
-			const focused = document.activeElement === dirty.element;
+			const focused = note.contains(document.activeElement);
 			dirty = undefined;
 			recovery.hidden = true;
 			pending.value = '';
-			vscode.setState({});
+			persist(null);
 			if (!focused) { applySnapshot(next); }
-			message('保存済み。');
+			savedMessage();
 		} else if (next.kind === 'conflict' && inFlight && next.requestId === inFlight.id) {
 			inFlight = undefined;
 			conflict(next.message);
