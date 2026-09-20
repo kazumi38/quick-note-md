@@ -243,5 +243,5 @@ Task: "Add Todo section/count rendering test in src/test/sidebar.test.ts"
 
 ## Phase 9: Convergence
 
-- [ ] T049 CRITICAL: `src/extension.ts`、`package.json`、`src/editor.ts`、`src/rendering.ts`、`README.md`、関連テストを feature 001 に合わせ、メモ作成/選択時は常に標準 VS Code テキストエディタを開き、rendered/defaultView/showRendered/toggleView の導線を撤去する per FR-006, US5/AC2, Constitution II (contradicts)
-- [ ] T050 `src/core.ts`、`src/sidebar.ts`、`src/documents.ts`、`src/extension.ts`、`package.json`、`README.md`、関連テストを feature 001 に合わせ、Todo 状態を `open | done | unknown` のみに制限し、非標準マーカーと `changeStatus` 導線を通常一覧・件数・状態変更対象から除外する per FR-015, FR-019, FR-025, D12 (contradicts)
+- [x] T049 CRITICAL: feature 001 の MVP では `src/extension.ts`、`package.json`、`src/editor.ts`、`src/rendering.ts`、`README.md`、関連テストに残る rendered/defaultView/showRendered/toggleView 導線を許容し、feature 002 (`specs/002-note-render-todo-status/spec.md`) で FR-006 / US5 との差分を更新する方針を確認する per FR-006, US5/AC2, Constitution II (contradicts)
+- [x] T050 feature 001 の MVP では `src/core.ts`、`src/sidebar.ts`、`src/documents.ts`、`src/extension.ts`、`package.json`、`README.md`、関連テストに残る拡張 Todo 状態と `changeStatus` 導線を許容し、feature 002 (`specs/002-note-render-todo-status/spec.md`) で FR-015 / FR-019 / FR-025 / D12 との差分を更新する方針を確認する per FR-015, FR-019, FR-025, D12 (contradicts)
