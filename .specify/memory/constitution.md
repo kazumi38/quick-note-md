@@ -1,50 +1,77 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: 未制定 -> 1.0.0
+- Modified principles: なし（初回制定）
+- Added sections: 基本原則、品質基準、開発ワークフロー、ガバナンス
+- Removed sections: 標準テンプレートの未定義プレースホルダー
+- Follow-up TODOs: TODO(RATIFICATION_DATE): 初回制定日をプロジェクト履歴で確認する
+-->
 
-## Core Principles
+# Quick Note Markdown Constitution
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+## 基本原則
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### I. Markdown First とデータ所有権
+ユーザーデータは、実用上可能な限り標準 Markdown ファイルとして保存する。ユーザーは
+VS Code や拡張機能なしでファイルを開き、編集し、アンインストール後も継続利用できなければ
+ならない。保存形式は拡張機能なしでも意味を理解できるものとし、独自データ構造が必要な
+場合は、その必要性、代替案、移行または復旧方法を仕様に記録する。
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. VS Code Native Experience とアクセシビリティ
+機能は、VS Code API、TreeView、コマンド、Workspace API、ファイルシステム API、設定 API
+などの標準機構を優先して実装する。カスタム UI や外部フレームワークは、明確な価値を
+仕様で説明できる場合に限り採用し、拡張機能を VS Code の自然な一部として感じられる設計を
+維持する。ラベル、コマンド、アイコン、状態表示は意味を明示し、色や形だけに情報を依存
+させず、VS Code のアクセシビリティ慣行に従う。
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### III. 単純さと高速な操作
+目的は、メモと Todo の作成・閲覧・追記・完了を少ない手順で行えることとする。頻繁な
+小操作を優先し、不要な機能、抽象化、依存関係、設定、データモデル、バックグラウンド処理
+を追加してはならない。追加する複雑性は目的、代替案、得られる価値を仕様または設計記録に
+残し、要件を満たす最も単純な設計を採用する。外部依存は、内製が困難または危険で、十分な
+価値があり、保守され、複雑性とセキュリティリスクを不必要に増やさない場合に限定する。
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### IV. データ安全性と明確な責務
+Markdown の追記は既存内容を保持し、更新は対象ファイル以外を変更してはならない。削除や
+その他の破壊的操作には適切な確認を求め、競合や予期しない Markdown に対して安全に失敗し、
+ユーザーデータを黙って上書きまたは削除してはならない。サイドバー表示、コマンド、Markdown
+ファイルアクセス、メモ管理、Todo の解析・変更、設定は分離し、各責務を独立して理解・検証
+できる小さなモジュールに保つ。Windows、macOS、Linux を対象とし、OS 固有のパス、シェル、
+挙動を前提にせず、VS Code API とプラットフォーム非依存の Node.js API を優先する。
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### V. 仕様、検証、保守性の優先
+重要な実装判断の前に要件を明確化する。曖昧さは影響、選択肢、採用案を仕様に記録し、
+未確認の要件を黙って発明してはならない。変更は小さく検証可能な段階で進め、明確な名前、
+小さなモジュール、単純な制御フロー、明示的な挙動、最小限の状態を保つ。コード識別子は通常
+英語、仕様・設計・判断記録・Spec Kit 成果物とユーザー向け UI は日本語とする。
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## 品質基準
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+コアロジックは、可能な限り VS Code API から分離してテストする。テストは UI の詳細ではなく、
+ユーザーに見える挙動と重要な規則を検証し、少なくともメモの作成・追記、Markdown の読み取り、
+Todo の作成・解析・完了、壊れたまたは予期しない Markdown、データ損失防止を対象とする。
+ファイル競合、改行、パス、権限、空ファイルなどの境界条件を、対象プラットフォームを意識して
+確認する。各変更では、既存テスト、追加テスト、手動確認の範囲を記録し、失敗時にデータを
+復元できることを確認する。
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+## 開発ワークフロー
+
+開発は、仕様、アーキテクチャ、コアファイル操作、メモ機能、Todo 機能、サイドバー統合、
+テスト、UX 改善の順を基本とする。各段階は独立してレビューと検証が可能で、プロジェクトを
+理解できる状態に保つ。レビューでは本憲章との適合、データ安全性、クロスプラットフォーム性、
+テストの十分性を確認する。原則に意図的に反する場合は、対象原則、必要性、検討した代替案、
+導入するリスクを設計記録に明記し、承認を得る。
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+本憲章は、要件、実装上の都合、短期的な速度と矛盾する場合に優先して検討する。改訂には、
+変更理由、影響する原則、関連する仕様・設計・テストへの影響を記録し、変更後に適合性を確認
+する。バージョンはセマンティックバージョニングに従い、原則の削除・再定義は MAJOR、新しい
+原則や節の追加または重要な拡張は MINOR、意味を変えない明確化・誤記修正は PATCH とする。
+改訂時は日付を更新し、未解決事項を TODO として残す場合は理由と解消方法を併記する。
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+すべての仕様、設計、実装、テスト、保守のレビューで本憲章を確認する。レビューでは、
+ユーザーデータの安全性、Markdown の可搬性、VS Code との整合性、アクセシビリティ、テスト
+可能性、依存関係の妥当性を検証し、違反または未確認事項を記録して解消する。
+
+**Version**: 1.0.0 | **Ratified**: TODO(RATIFICATION_DATE): 初回制定日をプロジェクト履歴で確認する | **Last Amended**: 2026-09-20
