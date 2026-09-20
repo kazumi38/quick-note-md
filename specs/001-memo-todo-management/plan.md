@@ -79,3 +79,9 @@ src/
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
 | なし | - | - |
+
+## 作業メモ
+
+- 2026-09-20: `npm ci` を実行し、既存依存関係をローカル検証用に導入した。
+- 2026-09-20: `npm run lint` と `npm run compile` は成功した。
+- 2026-09-20: `npm test` は `vscode-test` 実行時に `update.code.visualstudio.com` の名前解決ができず失敗した（`getaddrinfo ENOTFOUND`）。pretest の `compile-tests` / `compile` / `lint` までは成功している。

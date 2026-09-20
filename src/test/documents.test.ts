@@ -5,6 +5,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { DocumentStore } from '../documents';
 
+// Feature 001 storage contract coverage: EOF append only, targeted line updates, and safe conflict handling.
 suite('DocumentStore integration', () => {
 	let root: vscode.Uri;
 	let store: DocumentStore;
@@ -54,6 +55,18 @@ suite('DocumentStore integration', () => {
 		const rows = (await store.todos()).map(todo => todo.text);
 		assert.strictEqual(rows.length, 10);
 		assert.strictEqual(new Set(rows).size, 10);
+	});
+
+	test('saved direct edits become the base for the next append', async () => {
+		const uri = vscode.Uri.joinPath(root, 'memo.md');
+		await write(uri, 'before\n');
+		const document = await vscode.workspace.openTextDocument(uri);
+		const change = new vscode.WorkspaceEdit();
+		change.insert(uri, new vscode.Position(1, 0), 'saved change\n');
+		assert.ok(await vscode.workspace.applyEdit(change));
+		assert.strictEqual(await document.save(), true);
+		await store.append(uri, 'next');
+		assert.strictEqual(await read(uri), 'before\nsaved change\nnext\n');
 	});
 
 	test('status edits touch only marker and distinguish duplicate lines; stale refs fail', async () => {
@@ -143,6 +156,16 @@ suite('DocumentStore integration', () => {
 		await assert.rejects(store.setStatus(ref, 'done'));
 	});
 
+	test('todo creation fails safely when the default source path stops being a Markdown file', async () => {
+		await store.createTodo('task');
+		const uri = vscode.Uri.joinPath(root, 'todo.md');
+		await vscode.workspace.fs.delete(uri);
+		await vscode.workspace.fs.createDirectory(uri);
+		await assert.rejects(store.createTodo('blocked'));
+		const stat = await vscode.workspace.fs.stat(uri);
+		assert.ok(stat.type & vscode.FileType.Directory);
+	});
+
 	test('raw line mismatch cannot modify a different task at the same document version', async () => {
 		await store.createTodo('original');
 		const ref = (await store.todos())[0];
@@ -216,5 +239,20 @@ suite('DocumentStore integration', () => {
 		await throughAncestor.createTodo('allowed');
 		assert.strictEqual(await read(vscode.Uri.joinPath(managed, 'todo.md')), '- [ ] allowed\n');
 		assert.strictEqual((await throughAncestor.todos()).length, 1);
+	});
+
+	test('1,000-line Markdown files remain operable for list, append, and Todo completion', async () => {
+		const uri = vscode.Uri.joinPath(root, 'large.md');
+		const body = Array.from({ length: 999 }, (_, index) => `line ${index}`).join('\n');
+		await write(uri, `${body}\n- [ ] tail task\n`);
+		assert.ok((await store.list()).some(item => item.uri.toString() === uri.toString()));
+		await store.append(uri, 'after');
+		const todo = (await store.todos()).find(item => item.uri.toString() === uri.toString());
+		assert.ok(todo);
+		await store.setStatus(todo!, 'done');
+		const text = await read(uri);
+		assert.ok(text.startsWith('line 0\nline 1\n'));
+		assert.ok(text.includes('- [x] tail task\nafter\n'));
+		assert.ok(text.split('\n').length >= 1001);
 	});
 });
