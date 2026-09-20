@@ -53,9 +53,12 @@ suite('Extension commands', () => {
 		queueInput('日本語メモ', '日本語メモ', '追記');
 		await vscode.commands.executeCommand('quick-note-md.newMemo');
 		await vscode.commands.executeCommand('quick-note-md.newMemo');
-		const files = (await store.list()).map(item => item.uri.path.split('/').pop()).sort();
+		const memos = await store.list();
+		const files = memos.map(item => item.uri.path.split('/').pop()).sort();
 		assert.deepStrictEqual(files, ['日本語メモ-2.md', '日本語メモ.md']);
-		await vscode.commands.executeCommand('quick-note-md.appendMemo', (await store.list())[0].uri);
+		const memo = memos.find(item => item.uri.path.endsWith('/日本語メモ.md'));
+		assert.ok(memo);
+		await vscode.commands.executeCommand('quick-note-md.appendMemo', memo.uri);
 		const created = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(notesRoot(), '日本語メモ.md'));
 		assert.strictEqual(created.getText(), '# 日本語メモ\n追記\n');
 	});
