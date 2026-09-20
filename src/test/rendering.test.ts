@@ -200,12 +200,14 @@ suite('レンダリング Webview の境界', () => {
 			public replaceChildren(...children: Element[]) { this.innerHTML = children.map(child => child.textContent).join(''); }
 			public appendChild(child: Element) { this.textContent += child.textContent; }
 			public setAttribute() {}
+			public querySelectorAll() { return [leaf, ...extraLeaves]; }
 		}
 		const elements: Record<string, Element> = {};
 		for (const id of ['note', 'status', 'recovery', 'pending', 'source', 'reload', 'discard']) {
 			elements[id] = new Element();
 		}
 		const leaf = new Element();
+		const extraLeaves: Element[] = [];
 		leaf.textContent = '本文';
 		const sent: Record<string, unknown>[] = [];
 		const document = {
@@ -241,6 +243,12 @@ suite('レンダリング Webview の境界', () => {
 		deliver(snapshot(1));
 		return {
 			elements, leaf, sent, snapshot, deliver, state: () => state,
+			addLeaf: (id: string, text: string) => {
+				const element = new Element();
+				element.dataset.blockId = id;
+				element.textContent = text;
+				extraLeaves.push(element);
+			},
 			fire: (name: string) => elements.note.listeners.get(name)!({ target: leaf }),
 			flush: () => { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(callback => callback()); }
 		};
@@ -341,6 +349,26 @@ suite('レンダリング Webview の境界', () => {
 			assert.ok(!client.elements.status.textContent.includes('保存済み'));
 			client.deliver({ ...client.snapshot(2, '変更'), isDirty: false });
 			assert.match(client.elements.status.textContent, /保存済み/);
+		});
+
+		test('ACK 内の別本文変更と古い DOM を組み合わせず入力を保持する', () => {
+			const client = clientHarness();
+			client.addLeaf('2:0', '別の本文');
+			const initial = renderNote('本文\n\n別の本文');
+			client.deliver({ kind: 'snapshot', version: 2, ...initial });
+			client.leaf.textContent = 'ローカルの変更';
+			client.fire('input');
+			client.flush();
+			const request = client.sent.at(-1)!;
+			client.deliver({
+				kind: 'ack', version: 3, requestId: request.requestId,
+				...renderNote('ローカルの変更\n\n外部の変更')
+			});
+			assert.strictEqual(client.elements.pending.value, 'ローカルの変更');
+			assert.match(client.elements.status.textContent, /表示対象が変更/);
+			client.fire('input');
+			client.flush();
+			assert.strictEqual(client.sent.filter(message => message.kind === 'edit').length, 1);
 		});
 	});
 });

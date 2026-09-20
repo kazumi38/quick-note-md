@@ -89,6 +89,25 @@
 			savedMessage();
 		}
 	}
+	function matchesAcknowledgement(next, saved) {
+		if (next.spans.length !== snapshot.spans.length) { return false; }
+		const leaves = Array.from(note.querySelectorAll('[data-block-id]'));
+		if (leaves.length !== next.spans.length) { return false; }
+		for (let index = 0; index < next.spans.length; index++) {
+			const span = next.spans[index];
+			const previous = snapshot.spans[index];
+			if (span.id !== previous.id || span.kind !== previous.kind) { return false; }
+			const element = leaves.find(leaf => leaf.dataset.blockId === span.id);
+			if (!element || (span.id === dirty.id ? span.text !== saved : element.textContent !== span.text)) {
+				return false;
+			}
+		}
+		const normalize = node => ({
+			...node,
+			children: node.blockId === dirty.id ? [{ text: '' }] : node.children?.map(normalize)
+		});
+		return JSON.stringify(snapshot.nodes.map(normalize)) === JSON.stringify(next.nodes.map(normalize));
+	}
 	function commit() {
 		clearTimeout(timer);
 		if (!dirty || inFlight || composing || conflicted) { return; }
@@ -270,6 +289,10 @@
 			const saved = inFlight.text;
 			inFlight = undefined;
 			if (conflicted) { return; }
+			if (!matchesAcknowledgement(next, saved)) {
+				conflict('保存中に表示対象が変更されました。入力を保持しています。コピーしてから再読み込みしてください。');
+				return;
+			}
 			snapshot = next;
 			dirty.before = saved;
 			if (dirty.element.textContent !== saved || composing) {
