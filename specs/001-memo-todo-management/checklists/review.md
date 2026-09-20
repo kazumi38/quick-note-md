@@ -12,66 +12,66 @@
 
 ## 要件の網羅性
 
-- [ ] CHK001 メモの作成・一覧・参照・追記と Todo の作成・完了・再開・削除・参照について、開始条件、入力、期待結果が要件と受入シナリオに揃っているか？ [Completeness, Spec §User Story 1–5, Spec §FR-001–FR-020]
-- [ ] CHK002 初回利用時のノートディレクトリ不在、ワークスペース未選択、メモ・Todo がゼロ件の場合の扱いが定義されているか？ [Completeness, Gap, Spec §FR-023, Spec §FR-027, Spec §Assumptions]
-- [ ] CHK003 ノートディレクトリ設定の変更時に、既存データの扱い、新規 Todo の保存先、一覧の対象範囲をどうするかが定義されているか？ [Completeness, Gap, Spec §FR-023, Spec §D1, Spec §D3]
-- [ ] CHK004 メモ・Todo の入力取消、空文字、空白のみの入力、削除確認の取消について、データ変更の有無を含む要件が定義されているか？ [Completeness, Gap, Spec §User Story 1, Spec §FR-007, Spec §FR-014, Spec §FR-018]
+- [x] CHK001 メモの作成・一覧・参照・追記と Todo の作成・完了・再開・削除・参照について、開始条件、入力、期待結果が要件と受入シナリオに揃っているか？ [Completeness, Spec §User Story 1–5, Spec §FR-001–FR-020]
+- [x] CHK002 初回利用時のノートディレクトリ不在、ワークスペース未選択、メモ・Todo がゼロ件の場合の扱いが定義されているか？ [Completeness, Gap, Spec §FR-023, Spec §FR-027, Spec §Assumptions]
+- [x] CHK003 ノートディレクトリ設定の変更時に、既存データの扱い、新規 Todo の保存先、一覧の対象範囲をどうするかが定義されているか？ [Completeness, Gap, Spec §FR-023, Spec §D1, Spec §D3]
+- [x] CHK004 メモ・Todo の入力取消、空文字、空白のみの入力、削除確認の取消について、データ変更の有無を含む要件が定義されているか？ [Completeness, Gap, Spec §User Story 1, Spec §FR-007, Spec §FR-014, Spec §FR-018]
 
 ## 要件の明確性
 
-- [ ] CHK005 「安全なファイル名」の条件として、禁止文字、パス区切り、予約名、変換後に名前が空になる場合が明確であり、命名規則の未決事項と区別されているか？ [Clarity, Spec §FR-003, Spec §Assumptions]
-- [ ] CHK006 メモ一覧・Todo 検出の対象について、サブディレクトリの扱いと設定したノートディレクトリの境界が明記されているか？ [Clarity, Gap, Spec §FR-005, Spec §FR-023, Spec §D2–D3]
-- [ ] CHK007 認識するタスクリスト記法の範囲が、大文字のチェック、ネスト、空白差異、コードブロック内の記述を含めて曖昧なく定義されているか？ [Clarity, Spec §Edge Cases, Spec §FR-015, Spec §FR-025, Gap]
-- [ ] CHK008 「実用上妥当な範囲」での一覧更新と「次に表示・操作する際」の最新内容反映について、期限と契機が明確か？ [Clarity, Spec §FR-012, Spec §FR-028, Spec §D5]
-- [ ] CHK009 追記と Todo 入力の単一行・複数行の扱いについて、初期版で保証する範囲と計画段階へ保留する事項が区別されているか？ [Clarity, Spec §FR-007, Spec §FR-014, Spec §D10]
+- [x] CHK005 「安全なファイル名」の条件として、禁止文字、パス区切り、予約名、変換後に名前が空になる場合が明確であり、命名規則の未決事項と区別されているか？ [Clarity, Spec §FR-003, Spec §Assumptions]
+- [x] CHK006 メモ一覧・Todo 検出の対象について、サブディレクトリの扱いと設定したノートディレクトリの境界が明記されているか？ [Clarity, Gap, Spec §FR-005, Spec §FR-023, Spec §D2–D3]
+- [x] CHK007 認識するタスクリスト記法の範囲が、大文字のチェック、ネスト、空白差異、コードブロック内の記述を含めて曖昧なく定義されているか？ [Clarity, Spec §Edge Cases, Spec §FR-015, Spec §FR-025, Gap]
+- [x] CHK008 「実用上妥当な範囲」での一覧更新と「次に表示・操作する際」の最新内容反映について、期限と契機が明確か？ [Clarity, Spec §FR-012, Spec §FR-028, Spec §D5]
+- [x] CHK009 追記と Todo 入力の単一行・複数行の扱いについて、初期版で保証する範囲と計画段階へ保留する事項が区別されているか？ [Clarity, Spec §FR-007, Spec §FR-014, Spec §D10]
 
 ## 要件間の整合性
 
-- [ ] CHK010 外部作成ファイルを「Todo としては解釈されない」とする境界条件と、すべての対象 Markdown 内の Todo を認識する D1・D2・D4 の矛盾が解消されているか？ [Consistency, Conflict, Spec §Edge Cases, Spec §FR-024, Spec §D1–D4]
-- [ ] CHK011 同名メモについて、別名入力を促すことも許す受入シナリオと、自動的に一意な名前へ解決する必須要件が一致しているか？ [Consistency, Conflict, Spec §User Story 1 シナリオ3, Spec §FR-004]
-- [ ] CHK012 ファイル移動時の「一覧から除去」と「可能なら新しいパスに参照を更新」について、それぞれの適用条件と操作時の通知方針が整合しているか？ [Consistency, Spec §FR-021, Spec §FR-030, Spec §D7]
-- [ ] CHK013 一般的なファイル規模と応答の基準について、数百〜数千行・応答開始300ms未満という要件と、1,000行程度・遅延なく完了という成功基準が整合しているか？ [Consistency, Spec §NFR-001, Spec §SC-005]
+- [x] CHK010 外部作成ファイルを「Todo としては解釈されない」とする境界条件と、すべての対象 Markdown 内の Todo を認識する D1・D2・D4 の矛盾が解消されているか？ [Consistency, Conflict, Spec §Edge Cases, Spec §FR-024, Spec §D1–D4]
+- [x] CHK011 同名メモについて、別名入力を促すことも許す受入シナリオと、自動的に一意な名前へ解決する必須要件が一致しているか？ [Consistency, Conflict, Spec §User Story 1 シナリオ3, Spec §FR-004]
+- [x] CHK012 ファイル移動時の「一覧から除去」と「可能なら新しいパスに参照を更新」について、それぞれの適用条件と操作時の通知方針が整合しているか？ [Consistency, Spec §FR-021, Spec §FR-030, Spec §D7]
+- [x] CHK013 一般的なファイル規模と応答の基準について、数百〜数千行・応答開始300ms未満という要件と、1,000行程度・遅延なく完了という成功基準が整合しているか？ [Consistency, Spec §NFR-001, Spec §SC-005]
 
 ## 受入基準の品質
 
-- [ ] CHK014 操作数の数え方と開始状態が定義され、作成・追記・完了・再開それぞれの上限が D8 と SC-001〜SC-003 で一貫しているか？ [Measurability, Spec §D8, Spec §SC-001–SC-003]
-- [ ] CHK015 応答開始と操作完了の違い、対象ファイル規模、測定環境が明示され、「体感的に即時／遅延なく」を客観的に評価できるか？ [Measurability, Spec §NFR-001, Spec §SC-005]
-- [ ] CHK016 連続追記の成功基準に、元の内容の保持だけでなく、すべての追記内容の欠落・重複・順序違いがないことと順序の定義が含まれているか？ [Acceptance Criteria, Spec §User Story 2 シナリオ4, Spec §FR-011, Spec §SC-004]
-- [ ] CHK017 データを拡張機能なしで理解できること、失敗時に既存データを保持することについて、評価対象と合格条件が具体化されているか？ [Acceptance Criteria, Spec §FR-022, Spec §NFR-002, Spec §SC-006]
+- [x] CHK014 操作数の数え方と開始状態が定義され、作成・追記・完了・再開それぞれの上限が D8 と SC-001〜SC-003 で一貫しているか？ [Measurability, Spec §D8, Spec §SC-001–SC-003]
+- [x] CHK015 応答開始と操作完了の違い、対象ファイル規模、測定環境が明示され、「体感的に即時／遅延なく」を客観的に評価できるか？ [Measurability, Spec §NFR-001, Spec §SC-005]
+- [x] CHK016 連続追記の成功基準に、元の内容の保持だけでなく、すべての追記内容の欠落・重複・順序違いがないことと順序の定義が含まれているか？ [Acceptance Criteria, Spec §User Story 2 シナリオ4, Spec §FR-011, Spec §SC-004]
+- [x] CHK017 データを拡張機能なしで理解できること、失敗時に既存データを保持することについて、評価対象と合格条件が具体化されているか？ [Acceptance Criteria, Spec §FR-022, Spec §NFR-002, Spec §SC-006]
 
 ## シナリオの網羅性
 
-- [ ] CHK018 通常のエディタ編集、外部からの変更、同一ファイルへの連続操作について、それぞれの最新内容の扱いと競合時の優先規則が要件化されているか？ [Coverage, Spec §FR-011–FR-012, Spec §FR-028, Spec §D5, Gap]
-- [ ] CHK019 未保存の編集があるファイルへの追記・Todo 変更について、編集内容の保持、保存の扱い、操作対象とする内容が明記されているか？ [Coverage, Gap, Spec §FR-008, Spec §FR-012, Spec §NFR-002]
-- [ ] CHK020 作成・追記・状態変更・削除の各書き込み失敗について、既存内容の保持、未完了操作の通知、部分的な変更からの復旧または安全な中止の要件が定義されているか？ [Coverage, Spec §FR-021, Spec §FR-029, Spec §NFR-002]
-- [ ] CHK021 失敗後の再試行について、追記・新規 Todo の二重登録を避けるために必要な完了状態の提示と利用者の対処が規定されているか？ [Recovery, Gap, Spec §FR-011, Spec §FR-029]
-- [ ] CHK022 既存メモ内の Todo と既定 Todo ファイルについて、未完了・完了の分類、件数、完了項目の初期表示に関する要件が同じ範囲を対象としているか？ [Coverage, Spec §FR-019, Spec §D1–D4, Spec §D12, Spec §SC-007]
+- [x] CHK018 通常のエディタ編集、外部からの変更、同一ファイルへの連続操作について、それぞれの最新内容の扱いと競合時の優先規則が要件化されているか？ [Coverage, Spec §FR-011–FR-012, Spec §FR-028, Spec §D5, Gap]
+- [x] CHK019 未保存の編集があるファイルへの追記・Todo 変更について、編集内容の保持、保存の扱い、操作対象とする内容が明記されているか？ [Coverage, Gap, Spec §FR-008, Spec §FR-012, Spec §NFR-002]
+- [x] CHK020 作成・追記・状態変更・削除の各書き込み失敗について、既存内容の保持、未完了操作の通知、部分的な変更からの復旧または安全な中止の要件が定義されているか？ [Coverage, Spec §FR-021, Spec §FR-029, Spec §NFR-002]
+- [x] CHK021 失敗後の再試行について、追記・新規 Todo の二重登録を避けるために必要な完了状態の提示と利用者の対処が規定されているか？ [Recovery, Gap, Spec §FR-011, Spec §FR-029]
+- [x] CHK022 既存メモ内の Todo と既定 Todo ファイルについて、未完了・完了の分類、件数、完了項目の初期表示に関する要件が同じ範囲を対象としているか？ [Coverage, Spec §FR-019, Spec §D1–D4, Spec §D12, Spec §SC-007]
 
 ## 境界条件とデータ安全性
 
-- [ ] CHK023 一覧表示後や削除確認中に行の追加・削除・変更が起きた場合、同文の Todo を含む別項目への誤操作を防ぐ要件が明記されているか？ [Edge Case, Gap, Spec §FR-018, Spec §FR-026, Spec §D6]
-- [ ] CHK024 空ファイル、末尾改行なし、異なる改行形式、最終行の Todo 削除について、対象外の内容・改行を保持する条件が定義されているか？ [Edge Case, Spec §FR-008–FR-010, Spec §FR-018, Spec §NFR-003]
-- [ ] CHK025 標準外・解析不能な行を含むファイルでも、当該行と周辺のメモ本文を変更しない要件が、Todo の完了・再開・削除すべてに及んでいるか？ [Edge Case, Spec §FR-016–FR-018, Spec §FR-025, Spec §NFR-002]
-- [ ] CHK026 ファイル名の同時衝突や、操作途中での対象ファイルの削除・移動・権限変更について、既存データを上書きしない失敗条件が定義されているか？ [Edge Case, Gap, Spec §FR-004, Spec §FR-021, Spec §FR-029]
+- [x] CHK023 一覧表示後や削除確認中に行の追加・削除・変更が起きた場合、同文の Todo を含む別項目への誤操作を防ぐ要件が明記されているか？ [Edge Case, Gap, Spec §FR-018, Spec §FR-026, Spec §D6]
+- [x] CHK024 空ファイル、末尾改行なし、異なる改行形式、最終行の Todo 削除について、対象外の内容・改行を保持する条件が定義されているか？ [Edge Case, Spec §FR-008–FR-010, Spec §FR-018, Spec §NFR-003]
+- [x] CHK025 標準外・解析不能な行を含むファイルでも、当該行と周辺のメモ本文を変更しない要件が、Todo の完了・再開・削除すべてに及んでいるか？ [Edge Case, Spec §FR-016–FR-018, Spec §FR-025, Spec §NFR-002]
+- [x] CHK026 ファイル名の同時衝突や、操作途中での対象ファイルの削除・移動・権限変更について、既存データを上書きしない失敗条件が定義されているか？ [Edge Case, Gap, Spec §FR-004, Spec §FR-021, Spec §FR-029]
 
 ## 非機能要件
 
-- [ ] CHK027 数万行のファイルに対する「UI が固まらない」について、対象規模と許容する応答・待機状態が定義されているか？ [Measurability, Spec §Edge Cases, Spec §NFR-001, Gap]
-- [ ] CHK028 キーボード操作、スクリーンリーダー、コントラスト、色以外の状態識別について、一覧だけでなく入力・確認・エラー通知も対象であることと受入基準が明記されているか？ [Completeness, Spec §NFR-004, Gap]
-- [ ] CHK029 Windows・macOS・Linux の互換性要件が、パス・改行・権限の違いに対する許容範囲とデータ保護の基準まで具体化されているか？ [Clarity, Spec §NFR-003]
-- [ ] CHK030 設定値やファイル名によって意図した管理範囲外を変更しないための境界が、絶対パス・親ディレクトリ参照・リンク先の扱いを含めて定義されているか？ [Completeness, Gap, Spec §FR-003, Spec §FR-023, Spec §D3]
-- [ ] CHK031 日本語の利用者向け表示という憲章上の制約と、「専門用語に頼らず理解可能」なエラーの基準が要件として追跡可能か？ [Traceability, Spec §FR-029, Gap, 憲章 §V]
+- [x] CHK027 数万行のファイルに対する「UI が固まらない」について、対象規模と許容する応答・待機状態が定義されているか？ [Measurability, Spec §Edge Cases, Spec §NFR-001, Gap]
+- [x] CHK028 キーボード操作、スクリーンリーダー、コントラスト、色以外の状態識別について、一覧だけでなく入力・確認・エラー通知も対象であることと受入基準が明記されているか？ [Completeness, Spec §NFR-004, Gap]
+- [x] CHK029 Windows・macOS・Linux の互換性要件が、パス・改行・権限の違いに対する許容範囲とデータ保護の基準まで具体化されているか？ [Clarity, Spec §NFR-003]
+- [x] CHK030 設定値やファイル名によって意図した管理範囲外を変更しないための境界が、絶対パス・親ディレクトリ参照・リンク先の扱いを含めて定義されているか？ [Completeness, Gap, Spec §FR-003, Spec §FR-023, Spec §D3]
+- [x] CHK031 日本語の利用者向け表示という憲章上の制約と、「専門用語に頼らず理解可能」なエラーの基準が要件として追跡可能か？ [Traceability, Spec §FR-029, Gap, 憲章 §V]
 
 ## 依存関係と前提
 
-- [ ] CHK032 シングルルート中心・マルチルートでは最初のフォルダのみという前提について、対象外フォルダの扱いと利用者への説明が定義されているか？ [Assumption, Spec §Assumptions, Gap]
-- [ ] CHK033 対応する VS Code 環境の前提が記録され、ローカル以外のワークスペース環境を対象に含めるか除外するかが明示されているか？ [Dependency, Assumption, Gap, Spec §NFR-003]
-- [ ] CHK034 計画段階へ保留した命名規則・複数行追記と OQ-1〜OQ-3 について、未決事項、採用済みの既定値、解決が必要な時点が区別されているか？ [Clarity, Spec §Assumptions, Spec §D9–D10, Spec §Open Questions]
+- [x] CHK032 シングルルート中心・マルチルートでは最初のフォルダのみという前提について、対象外フォルダの扱いと利用者への説明が定義されているか？ [Assumption, Spec §Assumptions, Gap]
+- [x] CHK033 対応する VS Code 環境の前提が記録され、ローカル以外のワークスペース環境を対象に含めるか除外するかが明示されているか？ [Dependency, Assumption, Gap, Spec §NFR-003]
+- [x] CHK034 計画段階へ保留した命名規則・複数行追記と OQ-1〜OQ-3 について、未決事項、採用済みの既定値、解決が必要な時点が区別されているか？ [Clarity, Spec §Assumptions, Spec §D9–D10, Spec §Open Questions]
 
 ## 曖昧点・参照の矛盾
 
-- [ ] CHK035 参照先の ID は説明内容と一致しているか（ファイル不在の境界条件から FR-020、削除確認の前提から D7、Todo 作成の D11 から SC-003 への参照など）？ [Traceability, Conflict, Spec §Edge Cases, Spec §Assumptions, Spec §D11]
-- [ ] CHK036 完了済み Todo の保持・整理に関する OQ-3 が、データ損失防止と破壊的操作の確認要件に矛盾しない形で確定または明示的に保留され、初期版の対象範囲を判断できるか？ [Ambiguity, Spec §OQ-3, Spec §FR-018, Spec §NFR-002, Spec §Out of Scope]
+- [x] CHK035 参照先の ID は説明内容と一致しているか（ファイル不在の境界条件から FR-020、削除確認の前提から D7、Todo 作成の D11 から SC-003 への参照など）？ [Traceability, Conflict, Spec §Edge Cases, Spec §Assumptions, Spec §D11]
+- [x] CHK036 完了済み Todo の保持・整理に関する OQ-3 が、データ損失防止と破壊的操作の確認要件に矛盾しない形で確定または明示的に保留され、初期版の対象範囲を判断できるか？ [Ambiguity, Spec §OQ-3, Spec §FR-018, Spec §NFR-002, Spec §Out of Scope]
 
 ## 補足
 
