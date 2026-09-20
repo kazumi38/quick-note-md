@@ -240,3 +240,8 @@ Task: "Add Todo section/count rendering test in src/test/sidebar.test.ts"
 - ユーザーストーリー phase の全タスクには `[USx]` を付与
 - `[P]` は独立ファイルかつ未完了依存がないもののみ付与
 - 各タスクは必ず対象ファイルパスを明記
+
+## Phase 9: Convergence
+
+- [ ] T049 CRITICAL: `src/extension.ts`、`package.json`、`src/editor.ts`、`src/rendering.ts`、`README.md`、関連テストを feature 001 に合わせ、メモ作成/選択時は常に標準 VS Code テキストエディタを開き、rendered/defaultView/showRendered/toggleView の導線を撤去する per FR-006, US5/AC2, Constitution II (contradicts)
+- [ ] T050 `src/core.ts`、`src/sidebar.ts`、`src/documents.ts`、`src/extension.ts`、`package.json`、`README.md`、関連テストを feature 001 に合わせ、Todo 状態を `open | done | unknown` のみに制限し、非標準マーカーと `changeStatus` 導線を通常一覧・件数・状態変更対象から除外する per FR-015, FR-019, FR-025, D12 (contradicts)
