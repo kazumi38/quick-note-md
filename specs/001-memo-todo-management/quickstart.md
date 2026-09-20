@@ -50,12 +50,32 @@ npm run compile
 2. サイドバーを更新し、変更が反映されることを確認
 3. その後の追記・Todo 操作が最新内容を基準に成功することを確認
 
+### Scenario 6: 拡張機能を無効化しても Markdown を編集できる（FR-022 / SC-006）
+1. `notes/` 配下の `.md` を標準 Markdown エディタで開く
+2. 拡張機能を無効化しても本文がそのまま読めることを確認
+3. テキストエディタで本文・Todo 行を編集して保存する
+4. 拡張機能を再有効化し、一覧表示と次回操作が更新済み Markdown を基準に動作することを確認
+
 ## Test Commands
 ```bash
 npm run lint
 npm run compile
 npm test
 ```
+
+## Validation Log
+
+- 2026-09-20: `npm run lint` ✅
+- 2026-09-20: `npm run compile` ✅
+- 2026-09-20: `npm test` ⚠️ `vscode-test` が `update.code.visualstudio.com` を解決できず失敗（`getaddrinfo ENOTFOUND`）。pretest の `compile-tests` / `compile` / `lint` は成功。
+
+## Manual Checks
+
+- 新規メモ、同名メモ、10 回の連続追記で既存本文の欠落・重複・順序崩れがないこと
+- Todo の作成、完了、再開、削除、ソース参照で対象行以外が変わらないこと
+- 既存メモの直接編集保存後に、次回表示・追記・Todo 操作が最新内容を使うこと
+- 約 1,000 行規模の Markdown でメモを開く・追記する・Todo を完了する操作が継続して行えること
+- 拡張機能を無効化した状態でも `.md` が通常の Markdown として読めて編集できること
 
 ## References
 - Data model: [data-model.md](./data-model.md)

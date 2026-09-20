@@ -12,6 +12,8 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(sidebar, vscode.window.registerCustomEditorProvider(
 		NoteEditor.viewType, editor, { supportsMultipleEditorsPerDocument: true }));
 
+	// Feature 001 command contract: newMemo / openMemo / appendMemo / newTodo / completeTodo /
+	// reopenTodo / deleteTodo / showSource are all routed through the shared store + refresh flow.
 	const register = (name: string, action: (item?: unknown) => Promise<unknown>) => {
 		context.subscriptions.push(vscode.commands.registerCommand(`quick-note-md.${name}`, async (item?: unknown) => {
 			try {
