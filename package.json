@@ -1,7 +1,7 @@
 {
   "name": "quick-note-md",
   "displayName": "QuickNoteMD",
-  "description": "QuickNoteMD can write quick note at Primary Sidebar. ",
+  "description": "サイドバーで Markdown メモと Todo を管理し、レンダリング表示のまま安全に編集します。",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.138.0"
@@ -12,12 +12,183 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "QuickNoteMD",
+      "properties": {
+        "quick-note-md.notesDirectory": {
+          "type": "string",
+          "default": "notes",
+          "scope": "resource",
+          "description": "最初のワークスペースフォルダー内のノート保存先（相対パス）。"
+        },
+        "quick-note-md.defaultView": {
+          "type": "string",
+          "enum": [
+            "rendered",
+            "source"
+          ],
+          "enumDescriptions": [
+            "レンダリング表示（安全なテキスト部分を直接編集）",
+            "標準の Markdown テキストエディタ"
+          ],
+          "default": "rendered",
+          "scope": "resource",
+          "description": "メモを作成・開く際の表示モード。ファイル別の表示履歴は保存しません。"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "quick-note-md",
+          "title": "QuickNoteMD",
+          "icon": "media/note.svg"
+        }
+      ]
+    },
+    "views": {
+      "quick-note-md": [
+        {
+          "id": "quick-note-md.memos",
+          "name": "メモ"
+        },
+        {
+          "id": "quick-note-md.todos",
+          "name": "Todo"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "quick-note-md.rendered",
+        "displayName": "QuickNoteMD レンダリング表示",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
     "commands": [
       {
-        "command": "quick-note-md.helloWorld",
-        "title": "Hello World"
+        "command": "quick-note-md.newMemo",
+        "title": "QuickNoteMD: 新規メモ",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "quick-note-md.openMemo",
+        "title": "QuickNoteMD: メモを開く"
+      },
+      {
+        "command": "quick-note-md.appendMemo",
+        "title": "QuickNoteMD: メモに追記",
+        "icon": "$(add)"
+      },
+      {
+        "command": "quick-note-md.newTodo",
+        "title": "QuickNoteMD: 新規 Todo",
+        "icon": "$(add)"
+      },
+      {
+        "command": "quick-note-md.completeTodo",
+        "title": "QuickNoteMD: Todo を完了",
+        "icon": "$(check)"
+      },
+      {
+        "command": "quick-note-md.reopenTodo",
+        "title": "QuickNoteMD: Todo を再開",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "quick-note-md.changeStatus",
+        "title": "QuickNoteMD: ステータスを変更",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "quick-note-md.deleteTodo",
+        "title": "QuickNoteMD: Todo を削除",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "quick-note-md.showSource",
+        "title": "QuickNoteMD: 生 Markdown を表示",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "quick-note-md.showRendered",
+        "title": "QuickNoteMD: レンダリング表示に切り替え",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "quick-note-md.toggleView",
+        "title": "QuickNoteMD: 表示モードを切り替え",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "quick-note-md.refresh",
+        "title": "QuickNoteMD: 一覧を更新",
+        "icon": "$(refresh)"
       }
-    ]
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "quick-note-md.newMemo",
+          "when": "view == quick-note-md.memos",
+          "group": "navigation@1"
+        },
+        {
+          "command": "quick-note-md.newTodo",
+          "when": "view == quick-note-md.todos",
+          "group": "navigation@1"
+        },
+        {
+          "command": "quick-note-md.refresh",
+          "when": "view == quick-note-md.memos || view == quick-note-md.todos",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "quick-note-md.appendMemo",
+          "when": "view == quick-note-md.memos && viewItem == memo",
+          "group": "inline@1"
+        },
+        {
+          "command": "quick-note-md.completeTodo",
+          "when": "view == quick-note-md.todos && viewItem == activeTodo",
+          "group": "inline@1"
+        },
+        {
+          "command": "quick-note-md.reopenTodo",
+          "when": "view == quick-note-md.todos && viewItem == doneTodo",
+          "group": "inline@1"
+        },
+        {
+          "command": "quick-note-md.changeStatus",
+          "when": "view == quick-note-md.todos && (viewItem == activeTodo || viewItem == doneTodo)",
+          "group": "inline@2"
+        },
+        {
+          "command": "quick-note-md.deleteTodo",
+          "when": "view == quick-note-md.todos && (viewItem == activeTodo || viewItem == doneTodo)",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "quick-note-md.showSource",
+          "when": "viewItem == memo || viewItem == activeTodo || viewItem == doneTodo || viewItem == unknownTodo",
+          "group": "1_open@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "quick-note-md.toggleView",
+          "when": "resourceExtname == .md",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -31,20 +202,24 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.138.0",
+    "@types/markdown-it": "^14.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "24.x",
-    "typescript-eslint": "^8.61.1",
-    "eslint": "^10.5.0",
-    "typescript": "^6.0.3",
-    "ts-loader": "^9.6.2",
-    "webpack": "^5.107.2",
-    "webpack-cli": "^7.0.3",
+    "@types/vscode": "^1.138.0",
     "@vscode/test-cli": "^0.0.15",
-    "@vscode/test-electron": "^3.0.0"
+    "@vscode/test-electron": "^3.0.0",
+    "eslint": "^10.5.0",
+    "ts-loader": "^9.6.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1",
+    "webpack": "^5.107.2",
+    "webpack-cli": "^7.0.3"
   },
   "overrides": {
     "diff": "^8.0.4",
     "serialize-javascript": "^7.0.6"
+  },
+  "dependencies": {
+    "markdown-it": "^14.3.2"
   }
 }
