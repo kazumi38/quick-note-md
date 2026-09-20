@@ -1,113 +1,81 @@
-# Implementation Plan: [FEATURE]
+# Implementation Plan: メモ & Todo 管理（サイドバー統合）
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Branch**: `001-memo-todo-management` | **Date**: 2026-09-20 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
-
-**Note**: This template is filled in by the `/speckit-plan` command; its definition describes the execution workflow.
+**Input**: Feature specification from `/specs/001-memo-todo-management/spec.md`
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+Primary Sidebar から Markdown ファイルを直接データソースとして扱い、メモ作成・追記・一覧表示と Todo の作成/完了/再開/削除/参照を、既存データを壊さずに高速に実行できる構成を実装する。ファイル操作は対象行のみを更新し、外部変更を監視してサイドバー表示を再同期する。
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
+**Language/Version**: TypeScript 6.x / Node.js runtime (VS Code Extension Host)
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Primary Dependencies**: VS Code Extension API, markdown-it
 
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Storage**: Workspace 内 `notes/`（設定変更可）配下の Markdown ファイル
 
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Testing**: Mocha + @vscode/test-electron + TypeScript test files (`src/test/*.test.ts`)
 
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**Target Platform**: VS Code 1.138+ on Windows/macOS/Linux
 
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: VS Code desktop extension
 
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
+**Performance Goals**: 通常操作で UI 応答開始 300ms 未満（体感即時）
 
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Constraints**: Markdown First、標準 API 優先、対象外行を改変しない、同一ファイル更新の順序保証、読み取り専用/不在時は安全に失敗
 
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
-
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Scale/Scope**: 個人利用（数十ファイル、各数百〜数千行、連続追記 10 回で欠落なし）
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- **I. Markdown First とデータ所有権**: PASS（保存先は標準 `.md`、拡張なしで可読）
+- **II. VS Code Native Experience とアクセシビリティ**: PASS（TreeView/Command/Workspace API 前提）
+- **III. 単純さと高速な操作**: PASS（既定保存先集約 + 最小操作）
+- **IV. データ安全性と明確な責務**: PASS（対象行限定更新、失敗時中断、責務分離）
+- **V. 仕様、検証、保守性の優先**: PASS（仕様→調査→設計→検証の順を維持）
+
+Phase 1 設計後の再確認: **PASS**（生成成果物に憲章違反なし）
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/[###-feature]/
-├── plan.md              # This file (/speckit-plan command output)
-├── research.md          # Phase 0 output (/speckit-plan command)
-├── data-model.md        # Phase 1 output (/speckit-plan command)
-├── quickstart.md        # Phase 1 output (/speckit-plan command)
-├── contracts/           # Phase 1 output (/speckit-plan command)
-└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+specs/001-memo-todo-management/
+├── plan.md
+├── research.md
+├── data-model.md
+├── quickstart.md
+├── contracts/
+│   ├── sidebar-commands.md
+│   └── markdown-storage-contract.md
+└── tasks.md
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
 src/
-├── models/
-├── services/
-├── cli/
-└── lib/
-
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+├── extension.ts        # コマンド登録、監視、エラーハンドリング
+├── sidebar.ts          # メモ/Todo の表示モデル
+├── documents.ts        # Markdown 読み書きと安全更新
+├── core.ts             # Todo 記法・識別・状態定義
+├── configuration.ts    # notesDirectory / defaultView 設定
+└── test/
+   ├── extension.test.ts
+   ├── documents.test.ts
+   ├── sidebar.test.ts
+   └── core.test.ts
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: 既存の単一 VS Code 拡張構成（`src/*` + `src/test/*`）を維持し、ファイル操作・UI・設定・パースを分離したまま機能拡張する。
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
-
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+| なし | - | - |
