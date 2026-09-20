@@ -156,17 +156,14 @@ suite('DocumentStore integration', () => {
 		await assert.rejects(store.setStatus(ref, 'done'));
 	});
 
-	test('todo creation fails safely when the default source becomes read-only', async function () {
-		if (process.platform === 'win32') { this.skip(); }
+	test('todo creation fails safely when the default source path stops being a Markdown file', async () => {
 		await store.createTodo('task');
 		const uri = vscode.Uri.joinPath(root, 'todo.md');
-		await chmod(uri.fsPath, 0o444);
-		try {
-			await assert.rejects(store.createTodo('blocked'));
-			assert.strictEqual(await read(uri), '- [ ] task\n');
-		} finally {
-			await chmod(uri.fsPath, 0o644);
-		}
+		await vscode.workspace.fs.delete(uri);
+		await vscode.workspace.fs.createDirectory(uri);
+		await assert.rejects(store.createTodo('blocked'));
+		const stat = await vscode.workspace.fs.stat(uri);
+		assert.ok(stat.type & vscode.FileType.Directory);
 	});
 
 	test('raw line mismatch cannot modify a different task at the same document version', async () => {
