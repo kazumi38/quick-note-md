@@ -16,15 +16,28 @@ export class MemoNode extends vscode.TreeItem {
 
 export class TodoNode extends vscode.TreeItem {
 	constructor(public readonly todo: TodoRef) {
-		super(todo.text || todo.raw);
+		super(todo.text || todo.raw, (todo.comments?.comments.length ?? 0)
+			? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
 		this.id = `${todo.uri.toString()}:${todo.line}`;
-		this.description = statusInfo[todo.status].label;
+		this.description = `${statusInfo[todo.status].label}${todo.comments?.comments.length ? ` · コメント ${todo.comments.comments.length}件` : ''}`;
 		this.tooltip = `${this.description}: ${todo.text}\n${todo.uri.fsPath}:${todo.line + 1}`;
 		this.contextValue = todo.status === 'unknown' ? 'unknownTodo'
 			: todo.status === 'done' ? 'doneTodo' : 'activeTodo';
 		this.iconPath = new vscode.ThemeIcon(statusInfo[todo.status].icon);
 		this.accessibilityInformation = { label: `${this.description}: ${todo.text}` };
 		this.command = { command: 'quick-note-md.showSource', title: 'ソースを開く', arguments: [this] };
+	}
+}
+
+export class CommentNode extends vscode.TreeItem {
+	constructor(public readonly todo: TodoRef, public readonly comment: NonNullable<TodoRef['comments']>['comments'][number]) {
+		super(`コメント ${comment.order + 1}`, vscode.TreeItemCollapsibleState.None);
+		this.id = `${todo.uri.toString()}:${todo.line}:${comment.id}`;
+		this.description = comment.bodyMarkdown.split(/\r?\n/, 1)[0] || '（空コメント）';
+		this.tooltip = comment.bodyMarkdown;
+		this.contextValue = 'todoComment';
+		this.accessibilityInformation = { label: `コメント ${comment.order + 1}: ${this.description}` };
+		this.command = { command: 'quick-note-md.editTodoComment', title: 'Todo コメントを編集', arguments: [this] };
 	}
 }
 
@@ -47,13 +60,15 @@ export class MemoProvider implements vscode.TreeDataProvider<MemoNode>, vscode.D
 	dispose(): void { this.changed.dispose(); }
 }
 
-export class TodoProvider implements vscode.TreeDataProvider<StatusNode | TodoNode>, vscode.Disposable {
+export class TodoProvider implements vscode.TreeDataProvider<StatusNode | TodoNode | CommentNode>, vscode.Disposable {
 	private readonly changed = new vscode.EventEmitter<void>();
 	readonly onDidChangeTreeData = this.changed.event;
 	items: StatusNode[] = [];
-	getTreeItem(item: StatusNode | TodoNode): vscode.TreeItem { return item; }
-	getChildren(item?: StatusNode | TodoNode): (StatusNode | TodoNode)[] {
-		return item instanceof StatusNode ? item.items : item ? [] : this.items;
+	getTreeItem(item: StatusNode | TodoNode | CommentNode): vscode.TreeItem { return item; }
+	getChildren(item?: StatusNode | TodoNode | CommentNode): (StatusNode | TodoNode | CommentNode)[] {
+		if (item instanceof StatusNode) { return item.items; }
+		if (item instanceof TodoNode) { return (item.todo.comments?.comments ?? []).map(comment => new CommentNode(item.todo, comment)); }
+		return item ? [] : this.items;
 	}
 	update(items: TodoRef[]): void {
 		this.items = statusOrder.map(status => new StatusNode(status,

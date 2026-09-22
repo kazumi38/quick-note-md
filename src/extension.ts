@@ -3,7 +3,7 @@ import { defaultView, isManaged, notesRoot } from './configuration';
 import { safeFileName, statusInfo, statusOrder, TodoStatus } from './core';
 import { DocumentStore } from './documents';
 import { NoteEditor } from './editor';
-import { MemoNode, Sidebar, TodoNode } from './sidebar';
+import { CommentNode, MemoNode, Sidebar, TodoNode } from './sidebar';
 
 export function activate(context: vscode.ExtensionContext): void {
 	const store = new DocumentStore(notesRoot);
@@ -47,6 +47,10 @@ export function activate(context: vscode.ExtensionContext): void {
 		validateInput: value => !value.trim() ? '内容を入力してください。'
 			: /[\r\n\0]/.test(value) ? '1 行のテキストを入力してください。複数行はソースで編集できます。' : undefined
 	});
+	const inputComment = (prompt: string, value?: string) => vscode.window.showInputBox({
+		prompt, value, ignoreFocusOut: true,
+		validateInput: text => text.trim() ? undefined : 'コメントを入力してください。'
+	});
 
 	register('newMemo', async () => {
 		notesRoot();
@@ -70,6 +74,19 @@ export function activate(context: vscode.ExtensionContext): void {
 		const text = await inputLine('新しい Todo');
 		if (text !== undefined) { await store.createTodo(text); }
 	});
+	register('addTodoComment', async item => {
+		const todo = todoItem(item).todo;
+		if (todo.status === 'unknown' || todo.comments?.readOnly) {
+			throw new Error('認識できない Todo は生 Markdown で編集してください。');
+		}
+		const text = await inputComment('Todo コメントを追加（複数行 Markdown）');
+		if (text !== undefined) { await store.addTodoComment(todo, text); }
+	});
+	register('editTodoComment', async item => {
+		if (!(item instanceof CommentNode)) { throw new Error('編集するコメントを選択してください。'); }
+		const text = await inputComment('Todo コメントを編集（複数行 Markdown）', item.comment.bodyMarkdown);
+		if (text !== undefined) { await store.editTodoComment(item.todo, item.comment.id, text); }
+	});
 	register('completeTodo', async item => store.setStatus(todoItem(item).todo, 'done'));
 	register('reopenTodo', async item => store.setStatus(todoItem(item).todo, 'open'));
 	register('changeStatus', async item => {
@@ -84,7 +101,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		const todo = todoItem(item).todo;
 		if (todo.status === 'unknown') { throw new Error('認識できない Todo はソースで編集してください。'); }
 		if (await vscode.window.showWarningMessage(`「${todo.text}」を削除しますか？`,
-			{ modal: true, detail: 'Markdown の対象行だけを削除します。' }, '削除') === '削除') {
+			{ modal: true, detail: `${todo.comments?.comments.length ?? 0} 件のコメントも削除されます。Markdown の対象範囲だけを削除します。` }, '削除') === '削除') {
 			await store.deleteTodo(todo);
 		}
 	});

@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { appendText, parseTodos, safeFileName, statusInfo, statusOrder } from '../core';
+import { appendText, parseTodoComments, parseTodos, safeFileName, serializeComments, statusInfo, statusOrder } from '../core';
 
 suite('Markdown core', () => {
 	test('all statuses, uppercase X, ordered and nested lists retain source coordinates', () => {
@@ -45,6 +45,25 @@ suite('Markdown core', () => {
 			[4, 'open', '[link](https://example.com)'],
 			[5, 'done', '[release]'],
 		]);
+	});
+
+	test('comment blocks retain order and checkbox-like Markdown is not parsed as Todo', () => {
+		const source = '- [!] task\r\n<!-- quick-note-md:comments -->\r\n<!-- quick-note-md:comment -->\r\n# 背景\r\n- [ ] check later\r\n<!-- quick-note-md:end-comment -->\r\n<!-- quick-note-md:comment -->\r\n対応方針\r\n<!-- quick-note-md:end-comment -->\r\n<!-- quick-note-md:end-comments -->\r\n- [ ] next\r\n';
+		const todos = parseTodos(source);
+		assert.deepStrictEqual(todos.map(todo => todo.text), ['task', 'next']);
+		const set = parseTodoComments(source, todos[0], 'notes/todo.md');
+		assert.strictEqual(set.readOnly, false);
+		assert.deepStrictEqual(set.comments.map(comment => comment.bodyMarkdown), ['# 背景\n- [ ] check later', '対応方針']);
+		assert.strictEqual(set.comments[0].order, 0);
+		assert.ok(serializeComments(set.comments.map(comment => comment.bodyMarkdown), '\r\n').includes('\r\n<!-- quick-note-md:end-comments -->'));
+	});
+
+	test('malformed comment boundaries are preserved as read-only data', () => {
+		const todo = parseTodos('- [ ] task\n<!-- quick-note-md:comments -->\n<!-- quick-note-md:comment -->\nunfinished')[0];
+		const set = parseTodoComments('- [ ] task\n<!-- quick-note-md:comments -->\n<!-- quick-note-md:comment -->\nunfinished', todo);
+		assert.strictEqual(set.readOnly, true);
+		assert.ok(set.warning);
+		assert.ok(set.sourceText.includes('unfinished'));
 	});
 
 	for (const eol of ['\n', '\r\n']) {
