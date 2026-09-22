@@ -2,6 +2,7 @@
 
 ## Decision 1: 保存は Markdown、内部モデルは JSON 互換のオブジェクトにする
 - **Decision**: 1件の Todo に対して 0 件以上の独立したコメント群を保持し、正本は通常の Markdown ファイルに保存する。読み込み後の `TodoEntry`、`TodoComment`、`DraftInput` は、TypeScript の型で表現した JSON 互換の内部オブジェクトとして扱うが、JSON ファイルを永続化しない。
+- **Serialization**: コメント群は対象 Todo の直後に `<!-- quick-note-md:comments -->` と `<!-- quick-note-md:end-comments -->` で囲み、各コメントを `<!-- quick-note-md:comment -->` と `<!-- quick-note-md:end-comment -->` で囲む。各マーカーは必要なリストインデントを除き行頭に単独で置く。
 - **Rationale**: 構造化された内部モデルならコメントの所属、順序、編集対象、未保存状態を扱いやすい。一方、Markdownを正本にすることで、憲章の「Markdown First」、拡張機能なしで読めるデータ所有権、既存Todoとの互換性を維持できる。JSONを別ファイルで永続化しないため、Markdownとの同期ずれや孤立コメントも避けられる。
 - **Alternatives considered**:
   - TodoとコメントをJSONファイルへ保存: 構造化は容易だが、既存Markdownとの同期、拡張機能なしでの編集、外部変更の検出が複雑になる。
