@@ -17,9 +17,9 @@ description: "Todo コメント機能の実装タスク"
 
 **Purpose**: 既存拡張の構成と検証コマンドを、コメント機能の実装対象として確定する。
 
-- [ ] T001 [P] `specs/003-todo-details/plan.md` の構成に合わせて `src/core.ts`、`src/documents.ts`、`src/sidebar.ts`、`src/rendering.ts`、`src/editor.ts`、`src/extension.ts`、`src/test/` の責務と既存 API を確認する
-- [ ] T002 [P] `package.json` の `compile`、`compile-tests`、`lint`、`test` スクリプトを実装・検証手順として確定し、追加依存を導入しないことを確認する
-- [ ] T003 [P] `specs/003-todo-details/quickstart.md` の手動シナリオを実装後の受入チェック項目として整理する
+- [X] T001 [P] `specs/003-todo-details/plan.md` の構成に合わせて `src/core.ts`、`src/documents.ts`、`src/sidebar.ts`、`src/rendering.ts`、`src/editor.ts`、`src/extension.ts`、`src/test/` の責務と既存 API を確認する
+- [X] T002 [P] `package.json` の `compile`、`compile-tests`、`lint`、`test` スクリプトを実装・検証手順として確定し、追加依存を導入しないことを確認する
+- [X] T003 [P] `specs/003-todo-details/quickstart.md` の手動シナリオを実装後の受入チェック項目として整理する
 
 ---
 
@@ -29,12 +29,12 @@ description: "Todo コメント機能の実装タスク"
 
 **⚠️ CRITICAL**: このフェーズ完了までユーザーストーリーの実装を開始しない。
 
-- [ ] T004 `src/core.ts` に `TodoEntry`、`TodoComment`、`TodoCommentSet`、`DraftInput`、既存 6 状態の型と、`filePath + lineNumber + originalText` による Todo 識別・再検証ヘルパーを追加する
-- [ ] T005 `src/core.ts` に `<!-- quick-note-md:comments -->`、`<!-- quick-note-md:comment -->`、`<!-- quick-note-md:end-comment -->`、`<!-- quick-note-md:end-comments -->` の確定境界を使う Markdown 解析・シリアライズを実装し、コメント内のチェックボックスを Todo として二重計上せず、マーカーの欠落・重複・順序違反や未知の記法を読み取り専用情報として返す
-- [ ] T006 `src/documents.ts` に対象範囲だけを置換する差分更新、LF/CRLF・末尾改行の保持、管理対象パス検証、読み取り専用・削除・移動・保存失敗の明示的エラーを実装する
-- [ ] T007 `src/documents.ts` に読み込み時バージョンまたは全文再検証による外部変更・競合検出を実装し、競合時に古い内容を上書きせず未保存入力を退避可能な状態で返す
-- [ ] T008 [P] `src/test/core.test.ts` に Todo/comment 内部モデル、6 状態互換、コメント順、曖昧境界、チェックボックス二重計上防止の単体テストを追加する
-- [ ] T009 [P] `src/test/documents.test.ts` に対象範囲限定更新、同名 Todo の行位置識別、改行保持、管理対象外パス、外部変更、読み取り専用、保存失敗のテストを追加する
+- [X] T004 `src/core.ts` に `TodoEntry`、`TodoComment`、`TodoCommentSet`、`DraftInput`、既存 6 状態の型と、`filePath + lineNumber + originalText` による Todo 識別・再検証ヘルパーを追加する
+- [X] T005 `src/core.ts` に `<!-- quick-note-md:comments -->`、`<!-- quick-note-md:comment -->`、`<!-- quick-note-md:end-comment -->`、`<!-- quick-note-md:end-comments -->` の確定境界を使う Markdown 解析・シリアライズを実装し、コメント内のチェックボックスを Todo として二重計上せず、マーカーの欠落・重複・順序違反や未知の記法を読み取り専用情報として返す
+- [X] T006 `src/documents.ts` に対象範囲だけを置換する差分更新、LF/CRLF・末尾改行の保持、管理対象パス検証、読み取り専用・削除・移動・保存失敗の明示的エラーを実装する
+- [X] T007 `src/documents.ts` に読み込み時バージョンまたは全文再検証による外部変更・競合検出を実装し、競合時に古い内容を上書きせず未保存入力を退避可能な状態で返す
+- [X] T008 [P] `src/test/core.test.ts` に Todo/comment 内部モデル、6 状態互換、コメント順、曖昧境界、チェックボックス二重計上防止の単体テストを追加する
+- [X] T009 [P] `src/test/documents.test.ts` に対象範囲限定更新、同名 Todo の行位置識別、改行保持、管理対象外パス、外部変更、読み取り専用、保存失敗のテストを追加する
 
 **Checkpoint**: Markdown を壊さずに Todo とコメントを解析・再検証・安全更新できる基盤が完成していること。
 
@@ -48,20 +48,20 @@ description: "Todo コメント機能の実装タスク"
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] `src/test/core.test.ts` にタイトルのみ、複数コメントの古い順表示、見出し・段落・箇条書き・リンク、空コメント、コメント境界、未知記法の読み取り専用シナリオを追加する
-- [ ] T011 [P] [US1] `src/test/documents.test.ts` に新規コメント末尾追加、既存コメント単独編集、他 Todo/タイトル/状態の不変性、同名 Todo の単独更新、任意状態の保持を検証するテストを追加する
-- [ ] T012 [P] [US1] `src/test/sidebar.test.ts` にコメント件数・古い順表示、タイトルとの区別、認識不能 Todo の表示名、色に依存しない状態名の表示を検証するテストを追加する
-- [ ] T013 [P] [US1] `src/test/extension.test.ts` にコメント追加・編集・削除確認・キャンセル・生 Markdown 表示のコマンド契約と失敗時通知を検証するテストを追加する
+- [X] T010 [P] [US1] `src/test/core.test.ts` にタイトルのみ、複数コメントの古い順表示、見出し・段落・箇条書き・リンク、空コメント、コメント境界、未知記法の読み取り専用シナリオを追加する
+- [X] T011 [P] [US1] `src/test/documents.test.ts` に新規コメント末尾追加、既存コメント単独編集、他 Todo/タイトル/状態の不変性、同名 Todo の単独更新、任意状態の保持を検証するテストを追加する
+- [X] T012 [P] [US1] `src/test/sidebar.test.ts` にコメント件数・古い順表示、タイトルとの区別、認識不能 Todo の表示名、色に依存しない状態名の表示を検証するテストを追加する
+- [X] T013 [P] [US1] `src/test/extension.test.ts` にコメント追加・編集・削除確認・キャンセル・生 Markdown 表示のコマンド契約と失敗時通知を検証するテストを追加する
 
 ### Implementation for User Story 1
 
-- [ ] T014 [US1] `src/documents.ts` に Todo コメントの Markdown 保存形式を実装し、既存本文・隣接 Todo・改行形式を変更せず、再起動時に Markdown からコメント集合を再構築する
-- [ ] T015 [US1] `src/sidebar.ts` に Todo のコメント一覧/件数をタイトルと区別して表示し、古いコメントから新しいコメントの順、認識不能 Todo の読み取り専用表示、キーボード操作可能なラベルと状態名を追加する
-- [ ] T016 [US1] `src/rendering.ts` と `src/editor.ts` にコメント一覧、複数行 Markdown の追加・既存コメント編集、保存状態表示、生 Markdown への切替を実装する。Markdown 内の外部スクリプト実行とリモート画像自動取得は行わない
-- [ ] T017 [US1] `src/extension.ts` に `quick-note-md.addTodoComment` と `quick-note-md.editTodoComment` を登録し、Todo の状態を変更せずに対象コメントだけを再検証して保存する。競合・不在・読み取り専用・保存失敗時は未保存入力を保持し、再読込/再試行を案内する
-- [ ] T018 [US1] `src/extension.ts` に `quick-note-md.deleteTodo` のコメント連動確認を実装し、承認時だけ対象 Todo と全コメントを削除し、キャンセル・曖昧な所属・競合時は何も変更しない
-- [ ] T019 [US1] `package.json` にコメント追加・編集コマンド、Todo の全状態から利用できるメニュー、削除確認、生 Markdown 表示のコマンド/メニュー定義を追加し、キーボードのみで到達可能にする
-- [ ] T020 [US1] `src/test/core.test.ts`、`src/test/documents.test.ts`、`src/test/sidebar.test.ts`、`src/test/extension.test.ts` と `specs/003-todo-details/quickstart.md` のシナリオを実行し、10件の混在 Todo で SC-301〜SC-304 の受入結果を記録する
+- [X] T014 [US1] `src/documents.ts` に Todo コメントの Markdown 保存形式を実装し、既存本文・隣接 Todo・改行形式を変更せず、再起動時に Markdown からコメント集合を再構築する
+- [X] T015 [US1] `src/sidebar.ts` に Todo のコメント一覧/件数をタイトルと区別して表示し、古いコメントから新しいコメントの順、認識不能 Todo の読み取り専用表示、キーボード操作可能なラベルと状態名を追加する
+- [X] T016 [US1] `src/rendering.ts` と `src/editor.ts` にコメント一覧、複数行 Markdown の追加・既存コメント編集、保存状態表示、生 Markdown への切替を実装する。Markdown 内の外部スクリプト実行とリモート画像自動取得は行わない
+- [X] T017 [US1] `src/extension.ts` に `quick-note-md.addTodoComment` と `quick-note-md.editTodoComment` を登録し、Todo の状態を変更せずに対象コメントだけを再検証して保存する。競合・不在・読み取り専用・保存失敗時は未保存入力を保持し、再読込/再試行を案内する
+- [X] T018 [US1] `src/extension.ts` に `quick-note-md.deleteTodo` のコメント連動確認を実装し、承認時だけ対象 Todo と全コメントを削除し、キャンセル・曖昧な所属・競合時は何も変更しない
+- [X] T019 [US1] `package.json` にコメント追加・編集コマンド、Todo の全状態から利用できるメニュー、削除確認、生 Markdown 表示のコマンド/メニュー定義を追加し、キーボードのみで到達可能にする
+- [X] T020 [US1] `src/test/core.test.ts`、`src/test/documents.test.ts`、`src/test/sidebar.test.ts`、`src/test/extension.test.ts` と `specs/003-todo-details/quickstart.md` のシナリオを実行し、10件の混在 Todo で SC-301〜SC-304 の受入結果を記録する
 
 **Checkpoint**: User Story 1 が単独で完成し、コメント追加・編集・削除確認・生 Markdown 切替と、既存 Todo/6 状態/データ安全性の回帰が検証できること。
 
@@ -71,12 +71,12 @@ description: "Todo コメント機能の実装タスク"
 
 **Purpose**: 仕様・品質基準・既存機能との整合性を最終確認する。
 
-- [ ] T021 [P] `src/test/core.test.ts` と `src/test/documents.test.ts` の境界ケースを補強し、空ファイル、末尾改行なし、日本語、LF/CRLF、外部削除/移動、曖昧なコメント所属で入力消失と対象外変更がないことを確認する
-- [ ] T022 [P] `src/test/extension.test.ts` と `src/test/sidebar.test.ts` で既存メモ、タイトルのみ Todo、6状態、未解決件数、既存並び順、生 Markdown 切替の回帰を確認する
-- [ ] T023 [P] `specs/003-todo-details/data-model.md`、`specs/003-todo-details/contracts/todo-comment-contract.md`、`specs/003-todo-details/contracts/markdown-storage-contract.md` に確定した Markdown 区切り（`quick-note-md:comments` / `comment` / `end-comment` / `end-comments`）と失敗時 UX を反映する
-- [ ] T024 [P] `src/test/sidebar.test.ts` と `src/test/documents.test.ts` で100件程度の Markdown ファイル群を使い、Todo 一覧更新が200ms以内に開始される性能目標を確認する
-- [ ] T025 [P] `src/test/core.test.ts`、`src/test/sidebar.test.ts`、`src/test/documents.test.ts` で担当者属性を生成・表示・保存せず、個人用 Todo のまま維持されることを検証する
-- [ ] T026 `package.json` の `npm run lint`、`npm run compile`、`npm test` を実行し、TypeScript 型検査・Lint・拡張ホストテストを通過させる
+- [X] T021 [P] `src/test/core.test.ts` と `src/test/documents.test.ts` の境界ケースを補強し、空ファイル、末尾改行なし、日本語、LF/CRLF、外部削除/移動、曖昧なコメント所属で入力消失と対象外変更がないことを確認する
+- [X] T022 [P] `src/test/extension.test.ts` と `src/test/sidebar.test.ts` で既存メモ、タイトルのみ Todo、6状態、未解決件数、既存並び順、生 Markdown 切替の回帰を確認する
+- [X] T023 [P] `specs/003-todo-details/data-model.md`、`specs/003-todo-details/contracts/todo-comment-contract.md`、`specs/003-todo-details/contracts/markdown-storage-contract.md` に確定した Markdown 区切り（`quick-note-md:comments` / `comment` / `end-comment` / `end-comments`）と失敗時 UX を反映する
+- [X] T024 [P] `src/test/sidebar.test.ts` と `src/test/documents.test.ts` で100件程度の Markdown ファイル群を使い、Todo 一覧更新が200ms以内に開始される性能目標を確認する
+- [X] T025 [P] `src/test/core.test.ts`、`src/test/sidebar.test.ts`、`src/test/documents.test.ts` で担当者属性を生成・表示・保存せず、個人用 Todo のまま維持されることを検証する
+- [X] T026 `package.json` の `npm run lint`、`npm run compile`、`npm test` を実行し、TypeScript 型検査・Lint・拡張ホストテストを通過させる
 
 ---
 

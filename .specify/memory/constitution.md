@@ -1,10 +1,11 @@
 <!--
 Sync Impact Report
-- Version change: 未制定 -> 1.0.0
-- Modified principles: なし（初回制定）
-- Added sections: 基本原則、品質基準、開発ワークフロー、ガバナンス
-- Removed sections: 標準テンプレートの未定義プレースホルダー
-- Follow-up TODOs: TODO(RATIFICATION_DATE): 初回制定日をプロジェクト履歴で確認する
+- Version change: 1.0.0 -> 1.0.1
+- Modified principles: なし
+- Added sections: なし
+- Removed sections: なし
+- Follow-up TODOs: なし
+- Rationale: 初回制定日の履歴確定と改訂日更新のみ。原則の意味は変更しない。
 -->
 
 # Quick Note Markdown Constitution
@@ -74,4 +75,4 @@ Todo の作成・解析・完了、壊れたまたは予期しない Markdown、
 ユーザーデータの安全性、Markdown の可搬性、VS Code との整合性、アクセシビリティ、テスト
 可能性、依存関係の妥当性を検証し、違反または未確認事項を記録して解消する。
 
-**Version**: 1.0.0 | **Ratified**: TODO(RATIFICATION_DATE): 初回制定日をプロジェクト履歴で確認する | **Last Amended**: 2026-09-20
+**Version**: 1.0.1 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-22

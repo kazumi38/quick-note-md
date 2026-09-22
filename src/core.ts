@@ -14,12 +14,55 @@ export const statusInfo: Record<TodoStatus, { label: string; marker: string; ico
 
 export const statusOrder: TodoStatus[] = ['important', 'warn', 'open', 'note', 'skip', 'done', 'unknown'];
 
+export interface TodoIdentity {
+	filePath: string;
+	lineNumber: number;
+	originalText: string;
+}
+
+export interface TodoComment {
+	id: string;
+	todoId: TodoIdentity;
+	order: number;
+	bodyMarkdown: string;
+	createdAt?: string;
+	updatedAt?: string;
+	/** Source offsets, intentionally not serialized. */
+	start?: number;
+	end?: number;
+}
+
+export interface TodoCommentSet {
+	todoId: TodoIdentity;
+	comments: TodoComment[];
+	sourceText: string;
+	readOnly: boolean;
+	warning?: string;
+}
+
+export interface TodoEntry {
+	id: TodoIdentity;
+	title: string;
+	status: TodoStatus;
+	comments: TodoComment[];
+}
+
+export interface DraftInput {
+	todoId: TodoIdentity;
+	commentId?: string;
+	text: string;
+	mode: 'new' | 'edit';
+	dirty: boolean;
+	lastSavedVersion: number;
+}
+
 export interface ParsedTodo {
 	line: number;
 	text: string;
 	status: TodoStatus;
 	raw: string;
 	markerStart: number;
+	comments?: TodoCommentSet;
 }
 
 const markdown = new MarkdownIt({ html: false });
@@ -33,6 +76,19 @@ export function parseTodos(text: string): ParsedTodo[] {
 	const listLines = new Set<number>();
 	const linkedLines = new Set<number>();
 	const excluded = new Set<number>();
+	let inComment = false;
+	for (let line = 0; line < lines.length; line++) {
+		const trimmed = lines[line].trim();
+		if (trimmed === '<!-- quick-note-md:comments -->' || trimmed === '<!-- quick-note-md:comment -->') {
+			inComment = true;
+			excluded.add(line);
+		} else if (trimmed === '<!-- quick-note-md:end-comment -->' || trimmed === '<!-- quick-note-md:end-comments -->') {
+			excluded.add(line);
+			inComment = trimmed !== '<!-- quick-note-md:end-comments -->';
+		} else if (inComment) {
+			excluded.add(line);
+		}
+	}
 	for (const token of markdown.parse(text, {})) {
 		if (!token.map) { continue; }
 		if (token.type === 'list_item_open') { listLines.add(token.map[0]); }
@@ -63,6 +119,72 @@ export function parseTodos(text: string): ParsedTodo[] {
 		});
 	}
 	return todos;
+}
+
+const commentsStart = '<!-- quick-note-md:comments -->';
+const commentStart = '<!-- quick-note-md:comment -->';
+const commentEnd = '<!-- quick-note-md:end-comment -->';
+const commentsEnd = '<!-- quick-note-md:end-comments -->';
+
+function lineOffsets(source: string): number[] {
+	const offsets: number[] = [0];
+	for (let index = 0; index < source.length; index++) {
+		if (source[index] === '\n') { offsets.push(index + 1); }
+	}
+	return offsets;
+}
+
+/** Parse only a comment block immediately following the Todo line. */
+export function parseTodoComments(source: string, todo: ParsedTodo, filePath = ''): TodoCommentSet {
+	const lines = source.split(/\r\n|\n|\r/);
+	const offsets = lineOffsets(source);
+	const id: TodoIdentity = { filePath, lineNumber: todo.line, originalText: todo.raw };
+	const empty: TodoCommentSet = { todoId: id, comments: [], sourceText: '', readOnly: false };
+	const first = todo.line + 1;
+	if (first >= lines.length || lines[first].trim() !== commentsStart) {
+		return empty;
+	}
+	let cursor = first + 1;
+	const comments: TodoComment[] = [];
+	const indent = /^[ \t]*/.exec(lines[first])?.[0] ?? '';
+	let valid = true;
+	while (cursor < lines.length && lines[cursor].trim() !== commentsEnd) {
+		if (lines[cursor].trim() !== commentStart) { valid = false; break; }
+		const bodyStart = cursor + 1;
+		cursor = bodyStart;
+		while (cursor < lines.length && lines[cursor].trim() !== commentEnd && lines[cursor].trim() !== commentsEnd) { cursor++; }
+		if (cursor >= lines.length || lines[cursor].trim() !== commentEnd) { valid = false; break; }
+		const body = lines.slice(bodyStart, cursor)
+			.map(line => line.startsWith(indent) ? line.slice(indent.length) : line)
+			.join('\n');
+		comments.push({
+			id: `comment-${comments.length}`,
+			todoId: id,
+			order: comments.length,
+			bodyMarkdown: body,
+			start: offsets[bodyStart] ?? source.length,
+			end: offsets[cursor] ?? source.length,
+		});
+		cursor++;
+	}
+	if (!valid || cursor >= lines.length || lines[cursor].trim() !== commentsEnd) {
+		return { ...empty, sourceText: lines.slice(first).join('\n'), readOnly: true, warning: 'コメント境界を認識できないため、読み取り専用です。' };
+	}
+	const endLine = cursor + 1;
+	return {
+		todoId: id,
+		comments,
+		sourceText: source.slice(offsets[first], offsets[endLine] ?? source.length),
+		readOnly: false,
+	};
+}
+
+export function serializeComments(comments: readonly string[], eol = '\n', indent = ''): string {
+	return [
+		`${indent}${commentsStart}`,
+		...comments.flatMap(body => [`${indent}${commentStart}`, ...body.replace(/\r\n|\r|\n/g, '\n').split('\n').map(line => `${indent}${line}`), `${indent}${commentEnd}`]),
+		`${indent}${commentsEnd}`,
+	].join(eol);
 }
 
 export function safeFileName(title: string): string {

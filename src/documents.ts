@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import { posix } from 'path';
 import { lstat } from 'fs/promises';
-import { appendText, ParsedTodo, parseTodos, safeFileName, statusInfo, TodoStatus, validateInput } from './core';
+import { appendText, ParsedTodo, parseTodoComments, parseTodos, safeFileName, serializeComments, statusInfo, TodoStatus, validateInput } from './core';
 
 export interface TodoRef extends ParsedTodo {
 	uri: vscode.Uri;
 	version: number;
+	comments?: ReturnType<typeof parseTodoComments>;
 }
 
 function missing(error: unknown): boolean {
@@ -178,7 +179,10 @@ export class DocumentStore {
 		for (const { uri } of await this.list()) {
 			await this.guard(uri);
 			const document = await vscode.workspace.openTextDocument(uri);
-			result.push(...parseTodos(document.getText()).map(todo => ({ ...todo, uri, version: document.version })));
+			result.push(...parseTodos(document.getText()).map(todo => ({
+				...todo, uri, version: document.version,
+				comments: parseTodoComments(document.getText(), todo, uri.fsPath),
+			})));
 		}
 		return result;
 	}
@@ -196,6 +200,58 @@ export class DocumentStore {
 		return document;
 	}
 
+	private todoComments(document: vscode.TextDocument, ref: TodoRef) {
+		const actual = parseTodos(document.getText()).find(todo => todo.line === ref.line);
+		if (!actual) { throw new Error('Todo が変更されました。一覧を更新して再実行してください。'); }
+		const comments = parseTodoComments(document.getText(), actual, ref.uri.fsPath);
+		if (comments.readOnly) { throw new Error(comments.warning ?? 'コメント境界を認識できないため編集できません。'); }
+		return { actual, comments };
+	}
+
+	private commentRange(document: vscode.TextDocument, comments: ReturnType<typeof parseTodoComments>): { start: number; end: number } | undefined {
+		if (!comments.sourceText) { return undefined; }
+		const line = comments.todoId.lineNumber + 1;
+		if (line >= document.lineCount) { return undefined; }
+		const start = document.offsetAt(new vscode.Position(line, 0));
+		return document.getText().startsWith(comments.sourceText, start)
+			? { start, end: start + comments.sourceText.length } : undefined;
+	}
+
+	async addTodoComment(ref: TodoRef, text: string): Promise<number> {
+		if (!text.trim()) { throw new Error('コメントを入力してください。'); }
+		return this.serial(ref.uri, async () => {
+			const document = await this.todoDocument(ref);
+			const { comments } = this.todoComments(document, ref);
+			const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+			const indent = /^[ \t]*/.exec(ref.raw)?.[0] ?? '';
+			const body = comments.comments.map(comment => comment.bodyMarkdown);
+			body.push(text);
+			const block = serializeComments(body, eol, indent);
+			const lineRange = document.lineAt(ref.line).rangeIncludingLineBreak;
+			const insertionAt = document.offsetAt(lineRange.end);
+			const needsLeadingEol = insertionAt === document.getText().length && !document.getText().endsWith('\n');
+			const insertion = (needsLeadingEol ? eol : '') + block + (insertionAt < document.getText().length ? eol : '');
+			return this.editNow(document, ref.version, insertionAt, insertionAt, '', insertion, false);
+		});
+	}
+
+	async editTodoComment(ref: TodoRef, commentId: string, text: string): Promise<number> {
+		if (!text.trim()) { throw new Error('コメントを入力してください。'); }
+		return this.serial(ref.uri, async () => {
+			const document = await this.todoDocument(ref);
+			const { comments } = this.todoComments(document, ref);
+			const comment = comments.comments.find(candidate => candidate.id === commentId);
+			if (!comment) { throw new Error('コメントが見つかりません。'); }
+			const range = this.commentRange(document, comments);
+			if (!range || comment.start === undefined || comment.end === undefined) {
+				throw new Error('コメント境界を認識できないため編集できません。');
+			}
+			const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+			const indent = /^[ \t]*/.exec(ref.raw)?.[0] ?? '';
+			const bodies = comments.comments.map(candidate => candidate.id === commentId ? text : candidate.bodyMarkdown);
+			return this.editNow(document, ref.version, range.start, range.end, document.getText().slice(range.start, range.end), serializeComments(bodies, eol, indent), false);
+		});
+	}
 	async setStatus(ref: TodoRef, status: Exclude<TodoStatus, 'unknown'>): Promise<void> {
 		if (!statusInfo[status] || (status as TodoStatus) === 'unknown') { throw new Error('ステータスが不正です。'); }
 		return this.serial(ref.uri, async () => {
@@ -208,8 +264,18 @@ export class DocumentStore {
 	async deleteTodo(ref: TodoRef): Promise<void> {
 		return this.serial(ref.uri, async () => {
 			const document = await this.todoDocument(ref);
-			const range = document.lineAt(ref.line).rangeIncludingLineBreak;
-			await this.editNow(document, ref.version, document.offsetAt(range.start), document.offsetAt(range.end), document.getText(range), '', false);
+			const comments = this.todoComments(document, ref).comments;
+			const lineRange = document.lineAt(ref.line).rangeIncludingLineBreak;
+			let start = document.offsetAt(lineRange.start);
+			let end = document.offsetAt(lineRange.end);
+			const block = this.commentRange(document, comments);
+			if (block) {
+				start = Math.min(start, block.start);
+				end = block.end;
+				if (document.getText()[end] === '\r') { end++; }
+				if (document.getText()[end] === '\n') { end++; }
+			}
+			await this.editNow(document, ref.version, start, end, document.getText().slice(start, end), '', false);
 		});
 	}
 

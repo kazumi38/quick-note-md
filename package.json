@@ -91,6 +91,16 @@
         "icon": "$(add)"
       },
       {
+        "command": "quick-note-md.addTodoComment",
+        "title": "QuickNoteMD: Todo コメントを追加",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "quick-note-md.editTodoComment",
+        "title": "QuickNoteMD: Todo コメントを編集",
+        "icon": "$(edit)"
+      },
+      {
         "command": "quick-note-md.completeTodo",
         "title": "QuickNoteMD: Todo を完了",
         "icon": "$(check)"
@@ -169,6 +179,16 @@
           "command": "quick-note-md.changeStatus",
           "when": "view == quick-note-md.todos && (viewItem == activeTodo || viewItem == doneTodo)",
           "group": "inline@2"
+        },
+        {
+          "command": "quick-note-md.addTodoComment",
+          "when": "view == quick-note-md.todos && (viewItem == activeTodo || viewItem == doneTodo)",
+          "group": "inline@3"
+        },
+        {
+          "command": "quick-note-md.editTodoComment",
+          "when": "view == quick-note-md.todos && viewItem == todoComment",
+          "group": "inline@1"
         },
         {
           "command": "quick-note-md.deleteTodo",
