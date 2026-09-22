@@ -1,48 +1,156 @@
-# Welcome to your VS Code Extension
+# QuickNoteMD クイックスタート
 
-## What's in the folder
+QuickNoteMD は、VS Code のサイドバーから Markdown メモと Todo を管理する
+拡張機能です。メモと Todo は通常の `.md` ファイルとして保存されるため、
+拡張機能がなくても内容を読んだり編集したりできます。
 
-* This folder contains all of the files necessary for your extension.
-* `package.json` - this is the manifest file in which you declare your extension and command.
-  * The sample plugin registers a command and defines its title and command name. With this information VS Code can show the command in the command palette. It doesn’t yet need to load the plugin.
-* `src/extension.ts` - this is the main file where you will provide the implementation of your command.
-  * The file exports one function, `activate`, which is called the very first time your extension is activated (in this case by executing the command). Inside the `activate` function we call `registerCommand`.
-  * We pass the function containing the implementation of the command as the second parameter to `registerCommand`.
+## 目次
 
-## Setup
+- [前提条件](#前提条件)
+- [インストールと起動](#インストールと起動)
+- [基本的な使い方](#基本的な使い方)
+  - [メモを作成・閲覧する](#メモを作成閲覧する)
+  - [Todo を管理する](#todo-を管理する)
+  - [Todo にコメントを付ける](#todo-にコメントを付ける)
+- [表示モードと直接編集](#表示モードと直接編集)
+- [設定](#設定)
+- [データと安全性](#データと安全性)
+- [開発とテスト](#開発とテスト)
+- [手動確認項目](#手動確認項目)
+- [関連ドキュメント](#関連ドキュメント)
 
-* install the recommended extensions (amodio.tsl-problem-matcher, ms-vscode.extension-test-runner, and dbaeumer.vscode-eslint)
+## 前提条件
 
+- Node.js と npm が利用できること
+- VS Code 1.138.0 以降
+- 保存先ワークスペースに書き込み権限があること
+- 開発する場合は VS Code の拡張機能開発環境を利用できること
 
-## Get up and running straight away
+## インストールと起動
 
-* Press `F5` to open a new window with your extension loaded.
-* Run your command from the command palette by pressing (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and typing `Hello World`.
-* Set breakpoints in your code inside `src/extension.ts` to debug your extension.
-* Find output from your extension in the debug console.
+1. リポジトリのルートで依存関係をインストールします。
 
-## Make changes
+   ```sh
+   npm ci
+   ```
 
-* You can relaunch the extension from the debug toolbar after changing code in `src/extension.ts`.
-* You can also reload (`Ctrl+R` or `Cmd+R` on Mac) the VS Code window with your extension to load your changes.
+2. `F5` を押して拡張機能開発ホストを起動します。
+3. 開発ホストでフォルダーを開き、アクティビティバーの **QuickNoteMD** を
+   選択します。
+4. **メモ** と **Todo** のビューが表示されれば準備完了です。
 
+## 基本的な使い方
 
-## Explore the API
+### メモを作成・閲覧する
 
-* You can open the full set of our API when you open the file `node_modules/@types/vscode/index.d.ts`.
+1. **メモ** ビューの「新規メモ」を実行し、タイトルを入力します。
+2. メモは既定で `notes/` 配下に `.md` ファイルとして作成されます。
+   同名のメモがある場合は連番付きの名前になります。
+3. メモを選択すると、設定された表示モードで開きます。
+4. メモの「メモに追記」から短いテキストを末尾に追加できます。
+   追記は複数回行っても既存の本文を上書きしません。
 
-## Run tests
+### Todo を管理する
 
-* Install the [Extension Test Runner](https://marketplace.visualstudio.com/items?itemName=ms-vscode.extension-test-runner)
-* Run the "watch" task via the **Tasks: Run Task** command. Make sure this is running, or tests might not be discovered.
-* Open the Testing view from the activity bar and click the Run Test" button, or use the hotkey `Ctrl/Cmd + ; A`
-* See the output of the test result in the Test Results view.
-* Make changes to `src/test/extension.test.ts` or create new test files inside the `test` folder.
-  * The provided test runner will only consider files matching the name pattern `**.test.ts`.
-  * You can create folders inside the `test` folder to structure your tests any way you want.
+1. **Todo** ビューの「新規 Todo」で項目を作成します。既定の保存先は
+   `notes/todo.md` です。
+2. 完了アイコンで完了、再開アイコンで未完了に戻します。
+3. 「ステータスを変更」では次の状態を選択できます。
 
-## Go further
+   | 状態 | Markdown | 用途 |
+   |---|---|---|
+   | 未完了 | `- [ ] 本文` | 未対応 |
+   | 完了 | `- [x] 本文` | 対応済み（`[X]` も可） |
+   | Note | `- [n] 本文` | 参考記録 |
+   | Skip | `- [-] 本文` | 対応不要 |
+   | Warn | `- [!] 本文` | 注意が必要 |
+   | IMP | `- [i] 本文` | 重要 |
 
-* Reduce the extension size and improve the startup time by [bundling your extension](https://code.visualstudio.com/api/working-with-extensions/bundling-extension).
-* [Publish your extension](https://code.visualstudio.com/api/working-with-extensions/publishing-extension) on the VS Code extension marketplace.
-* Automate builds by setting up [Continuous Integration](https://code.visualstudio.com/api/working-with-extensions/continuous-integration).
+4. Todo は状態順に表示され、完了グループは初期状態で折りたたまれます。
+   認識できない記法は読み取り専用として表示されるため、ソースで修正します。
+5. Todo の削除には確認が必要です。「生 Markdown を表示」から対象行を直接
+   開くこともできます。
+
+### Todo にコメントを付ける
+
+1. Todo を選択し、「Todo コメントを追加」を実行します。
+2. 複数行 Markdown のコメントを入力して保存します。
+3. 既存コメントは「Todo コメントを編集」から更新できます。新しいコメントは
+   既存コメントの末尾に追加されます。
+4. コメントは対象 Todo の直後に専用の HTML コメント境界付きで保存されます。
+   標準の Markdown エディタで開いても内容を確認できます。
+
+## 表示モードと直接編集
+
+- `rendered`（既定）は、Markdown をレンダリングした表示です。編集可能と
+  示された段落・見出し・平坦なリストのテキストをその場で編集できます。
+- `source` は標準の Markdown テキストエディタです。テーブル、コードブロック、
+  画像、複雑な構造、複数行の追記はこの表示で編集してください。
+- エディタの「表示モードを切り替え」またはコマンドパレットの
+  `QuickNoteMD: 表示モードを切り替え` で切り替えられます。
+- 既定の表示モードは設定で変更できます。ファイルごとの表示履歴は保存しません。
+- 外部 HTML・スクリプト・リモート画像は実行または読み込みません。
+
+## 設定
+
+| 設定 | 既定値 | 説明 |
+|---|---|---|
+| `quick-note-md.notesDirectory` | `notes` | 最初のワークスペース内の相対保存先 |
+| `quick-note-md.defaultView` | `rendered` | `rendered` または `source` |
+
+保存先には絶対パス、親ディレクトリ、空のパスは指定できません。マルチルート
+ワークスペースでは最初のフォルダーだけが対象です。設定変更後は一覧を更新して
+ください。
+
+## データと安全性
+
+- 変更は通常の Markdown に対する対象範囲の編集として行われ、対象外の本文や改行を
+  保持します。
+- 未保存の通常編集がある場合、拡張機能は自動保存せず、競合を警告します。
+  内容を保存または確認してから再操作してください。
+- 標準の保存、Undo、Redo を利用できます。
+- 拡張機能を無効化しても `.md` ファイルは通常の Markdown として開けます。
+- Markdown の変更・削除・移動・権限エラーが発生した場合は、ソース表示で内容を
+  退避してから再読み込みしてください。
+
+## 開発とテスト
+
+### コマンド
+
+```sh
+npm run lint
+npm run compile
+npm test
+```
+
+`npm test` はテストのコンパイル、ビルド、lint を実行した後、VS Code のテスト
+ホストを起動します。初回実行時は VS Code のダウンロードにネットワーク接続が
+必要です。Linux のヘッドレス環境では Xvfb などのディスプレイが必要です。
+
+### デバッグ
+
+- `F5` で拡張機能開発ホストを起動します。
+- `src/` のコードにブレークポイントを設定できます。
+- 出力はデバッグコンソールで確認できます。
+- ソース変更後は開発ホストを再起動するか、`Ctrl+R`（macOS は `Cmd+R`）で
+  ウィンドウを再読み込みします。
+
+## 手動確認項目
+
+- 新規メモ、同名メモ、10 回連続の追記で本文の欠落・重複・上書きがないこと
+- Todo の全 6 状態の作成、状態変更、削除キャンセルで対象外が変わらないこと
+- Todo コメントの追加・編集、再起動後の表示順、同名 Todo への誤適用がないこと
+- レンダリング表示での直接編集、表示切替、保存、Undo／Redo、日本語 IME 入力
+- LF／CRLF、未知記法、コードブロック、外部変更・削除・権限エラー
+- 生 Markdown とレンダリング表示を同時に開いた場合に入力が失われないこと
+- 拡張機能を無効化しても `.md` が通常の Markdown として読めて編集できること
+- 約 1,000 行のメモで操作でき、Windows・macOS・Linux のキーボード操作と
+  スクリーンリーダーで状態を確認できること
+
+## 関連ドキュメント
+
+- [README](README.md)
+- [001 仕様と検証シナリオ](specs/001-memo-todo-management/quickstart.md)
+- [003 Todo コメントの検証シナリオ](specs/003-todo-details/quickstart.md)
+- [001 仕様書](specs/001-memo-todo-management/spec.md)
+- [002 仕様書](specs/002-note-render-todo-status/spec.md)
