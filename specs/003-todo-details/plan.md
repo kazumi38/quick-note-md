@@ -8,6 +8,8 @@
 
 既存の Markdown ベース Todo を壊さず、各 Todo に複数行 Markdown のコメント群を持たせて背景・調査内容・対応方針を残せるようにする。保存形式は従来どおりの `.md` ファイルを維持し、コメント追加・修正・削除は対象 Todo とそのコメント群にのみ適用する。状態変更はコメント操作と切り離し、完了・Skip・Warn などの状態でもメモを残せる。
 
+コメント群は対象 Todo の直後に、`<!-- quick-note-md:comments -->` と `<!-- quick-note-md:end-comments -->` で囲んで保存する。各コメントは `<!-- quick-note-md:comment -->` と `<!-- quick-note-md:end-comment -->` の間に通常の複数行 Markdown として置き、マーカーの欠落・重複・順序違反・対象 Todo から分離した記法は読み取り専用として扱う。
+
 ## Technical Context
 
 **Language/Version**: TypeScript 6.x / Node.js runtime (VS Code Extension Host)
