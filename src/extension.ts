@@ -3,7 +3,7 @@ import { defaultView, isManaged, notesRoot } from './configuration';
 import { safeFileName, statusInfo, statusOrder, TodoStatus } from './core';
 import { DocumentStore } from './documents';
 import { NoteEditor } from './editor';
-import { CommentNode, MemoNode, Sidebar, TodoNode } from './sidebar';
+import { CommentNode, MemoNode, Sidebar, TodoBodyNode, TodoNode } from './sidebar';
 
 export function activate(context: vscode.ExtensionContext): void {
 	const store = new DocumentStore(notesRoot);
@@ -26,7 +26,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		}));
 	};
 	const memoUri = (item?: unknown, requireManaged = true): vscode.Uri => {
-		const uri = item instanceof MemoNode ? item.uri : item instanceof TodoNode ? item.todo.uri
+		const uri = item instanceof MemoNode ? item.uri : item instanceof TodoNode || item instanceof TodoBodyNode ? item.todo.uri
 			: item instanceof vscode.Uri ? item : editor.activeUri ?? vscode.window.activeTextEditor?.document.uri
 				?? sidebar.memoView.selection[0]?.uri;
 		if (!uri || (requireManaged && !isManaged(uri))) {

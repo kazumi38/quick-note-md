@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { appendText, parseTodoComments, parseTodos, safeFileName, serializeComments, statusInfo, statusOrder } from '../core';
+import { appendText, parseTodoComments, parseTodos, safeFileName, serializeComments, serializeTodoMetadata, statusInfo, statusOrder } from '../core';
 
 suite('Markdown core', () => {
 	test('all statuses, uppercase X, ordered and nested lists retain source coordinates', () => {
@@ -56,6 +56,19 @@ suite('Markdown core', () => {
 		assert.deepStrictEqual(set.comments.map(comment => comment.bodyMarkdown), ['# 背景\n- [ ] check later', '対応方針']);
 		assert.strictEqual(set.comments[0].order, 0);
 		assert.ok(serializeComments(set.comments.map(comment => comment.bodyMarkdown), '\r\n').includes('\r\n<!-- quick-note-md:end-comments -->'));
+	});
+
+	test('Todo metadata is optional, preserved for old rows, and parsed independently of replies', () => {
+		const source = '- [ ] task\n<!-- quick-note-md:meta labels="IMP, 顧客" due="2026-10-01" -->\n'
+			+ '<!-- quick-note-md:comments -->\n<!-- quick-note-md:comment -->\n- [ ] reply checkbox\n'
+			+ '<!-- quick-note-md:end-comment -->\n<!-- quick-note-md:end-comments -->\n- [ ] old';
+		const todos = parseTodos(source);
+		assert.deepStrictEqual(todos.map(todo => [todo.text, todo.labels, todo.dueDate]), [
+			['task', ['IMP', '顧客'], '2026-10-01'],
+			['old', [], undefined],
+		]);
+		assert.deepStrictEqual(parseTodoComments(source, todos[0]).comments[0].bodyMarkdown, '- [ ] reply checkbox');
+		assert.strictEqual(serializeTodoMetadata([' IMP ', 'IMP'], '2026-10-01'), '<!-- quick-note-md:meta labels="IMP" due="2026-10-01" -->\n');
 	});
 
 	test('malformed comment boundaries are preserved as read-only data', () => {

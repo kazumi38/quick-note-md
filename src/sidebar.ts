@@ -16,7 +16,7 @@ export class MemoNode extends vscode.TreeItem {
 
 export class TodoNode extends vscode.TreeItem {
 	constructor(public readonly todo: TodoRef) {
-		super(todo.text || todo.raw, (todo.comments?.comments.length ?? 0)
+		super(todo.text || todo.raw, ((todo.comments?.comments.length ?? 0) > 0 || todo.bodyMarkdown !== undefined)
 			? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
 		this.id = `${todo.uri.toString()}:${todo.line}`;
 		const labels = todo.labels?.length ? todo.labels.map(label => `🏷 ${label}`).join(' ') : '';
@@ -44,6 +44,17 @@ export class CommentNode extends vscode.TreeItem {
 	}
 }
 
+export class TodoBodyNode extends vscode.TreeItem {
+		constructor(public readonly todo: TodoRef) {
+			super('本文', vscode.TreeItemCollapsibleState.None);
+			this.id = `${todo.uri.toString()}:${todo.line}:body`;
+			this.description = todo.bodyMarkdown?.split(/\r?\n/, 1)[0] || '本文を追加';
+			this.contextValue = 'todoBody';
+			this.tooltip = todo.bodyMarkdown || '本文はまだありません。';
+			this.command = { command: 'quick-note-md.showSource', title: 'Todo の Markdown を開く', arguments: [this] };
+		}
+}
+
 export class StatusNode extends vscode.TreeItem {
 	constructor(public readonly status: TodoStatus, public readonly items: TodoNode[]) {
 		super(`${statusInfo[status].label} (${items.length})`,
@@ -63,14 +74,19 @@ export class MemoProvider implements vscode.TreeDataProvider<MemoNode>, vscode.D
 	dispose(): void { this.changed.dispose(); }
 }
 
-export class TodoProvider implements vscode.TreeDataProvider<StatusNode | TodoNode | CommentNode>, vscode.Disposable {
+export class TodoProvider implements vscode.TreeDataProvider<StatusNode | TodoNode | CommentNode | TodoBodyNode>, vscode.Disposable {
 	private readonly changed = new vscode.EventEmitter<void>();
 	readonly onDidChangeTreeData = this.changed.event;
 	items: StatusNode[] = [];
-	getTreeItem(item: StatusNode | TodoNode | CommentNode): vscode.TreeItem { return item; }
-	getChildren(item?: StatusNode | TodoNode | CommentNode): (StatusNode | TodoNode | CommentNode)[] {
+	getTreeItem(item: StatusNode | TodoNode | CommentNode | TodoBodyNode): vscode.TreeItem { return item; }
+	getChildren(item?: StatusNode | TodoNode | CommentNode | TodoBodyNode): (StatusNode | TodoNode | CommentNode | TodoBodyNode)[] {
 		if (item instanceof StatusNode) { return item.items; }
-		if (item instanceof TodoNode) { return (item.todo.comments?.comments ?? []).map(comment => new CommentNode(item.todo, comment)); }
+		if (item instanceof TodoNode) {
+			return [
+				...(item.todo.bodyMarkdown !== undefined ? [new TodoBodyNode(item.todo)] : []),
+				...(item.todo.comments?.comments ?? []).map(comment => new CommentNode(item.todo, comment)),
+			];
+		}
 		return item ? [] : this.items;
 	}
 	update(items: TodoRef[]): void {
