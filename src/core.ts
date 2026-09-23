@@ -63,6 +63,10 @@ export interface ParsedTodo {
 	raw: string;
 	markerStart: number;
 	comments?: TodoCommentSet;
+	/** Optional metadata introduced by QuickNoteMD; old task rows remain valid. */
+	labels?: string[];
+	dueDate?: string;
+	bodyMarkdown?: string;
 }
 
 const markdown = new MarkdownIt({ html: false });
@@ -110,12 +114,17 @@ export function parseTodos(text: string): ParsedTodo[] {
 			? /^\[([ xXn!i-])\](?:[ \t]+(.*)|$)$/.exec(prefix[2])
 			: null;
 		if (!valid && linkedLines.has(line)) { continue; }
+		const metadata = lines[line + 1]?.trim().match(metadataPattern);
+		const labels = metadata?.[1] ? metadata[1].split(',').map(label => label.trim()).filter(Boolean) : [];
+		const dueDate = metadata?.[2] || undefined;
 		todos.push({
 			line,
 			raw,
 			markerStart,
 			status: valid ? markers.get(valid[1])! : 'unknown',
 			text: valid ? (valid[2] ?? '') : prefix[2],
+			labels,
+			dueDate,
 		});
 	}
 	return todos;
@@ -125,6 +134,7 @@ const commentsStart = '<!-- quick-note-md:comments -->';
 const commentStart = '<!-- quick-note-md:comment -->';
 const commentEnd = '<!-- quick-note-md:end-comment -->';
 const commentsEnd = '<!-- quick-note-md:end-comments -->';
+const metadataPattern = /^<!--\s*quick-note-md:meta(?:\s+labels="([^"]*)")?(?:\s+due="([^"]*)")?\s*-->$/;
 
 function lineOffsets(source: string): number[] {
 	const offsets: number[] = [0];
@@ -140,7 +150,7 @@ export function parseTodoComments(source: string, todo: ParsedTodo, filePath = '
 	const offsets = lineOffsets(source);
 	const id: TodoIdentity = { filePath, lineNumber: todo.line, originalText: todo.raw };
 	const empty: TodoCommentSet = { todoId: id, comments: [], sourceText: '', readOnly: false };
-	const first = todo.line + 1;
+	const first = metadataPattern.test(lines[todo.line + 1]?.trim() ?? '') ? todo.line + 2 : todo.line + 1;
 	if (first >= lines.length || lines[first].trim() !== commentsStart) {
 		return empty;
 	}
@@ -185,6 +195,15 @@ export function serializeComments(comments: readonly string[], eol = '\n', inden
 		...comments.flatMap(body => [`${indent}${commentStart}`, ...body.replace(/\r\n|\r|\n/g, '\n').split('\n').map(line => `${indent}${line}`), `${indent}${commentEnd}`]),
 		`${indent}${commentsEnd}`,
 	].join(eol);
+}
+
+export function serializeTodoMetadata(labels: readonly string[] = [], dueDate?: string, eol = '\n', indent = ''): string {
+	const safeLabels = labels.map(label => label.trim()).filter(Boolean).filter((label, index, all) => all.indexOf(label) === index);
+	const attrs = [
+		safeLabels.length ? ` labels="${safeLabels.join(',')}"` : '',
+		dueDate?.trim() ? ` due="${dueDate.trim()}"` : '',
+	].join('');
+	return `${indent}<!-- quick-note-md:meta${attrs} -->${eol}`;
 }
 
 export function safeFileName(title: string): string {

@@ -87,6 +87,25 @@ export function activate(context: vscode.ExtensionContext): void {
 		const text = await inputComment('Todo コメントを編集（複数行 Markdown）', item.comment.bodyMarkdown);
 		if (text !== undefined) { await store.editTodoComment(item.todo, item.comment.id, text); }
 	});
+	register('editTodoMetadata', async item => {
+		const todo = todoItem(item).todo;
+		if (todo.status === 'unknown') { throw new Error('認識できない Todo はソースで編集してください。'); }
+		const labels = await vscode.window.showInputBox({
+			prompt: 'ラベル（カンマ区切り、空欄で削除）',
+			value: (todo.labels ?? []).join(', '),
+			ignoreFocusOut: true,
+		});
+		if (labels === undefined) { return; }
+		const dueDate = await vscode.window.showInputBox({
+			prompt: '対応日（YYYY-MM-DD、空欄で未設定）',
+			value: todo.dueDate ?? '',
+			ignoreFocusOut: true,
+			validateInput: value => value && !/^\d{4}-\d{2}-\d{2}$/.test(value) ? 'YYYY-MM-DD 形式で入力してください。' : undefined,
+		});
+		if (dueDate !== undefined) {
+			await store.setTodoMetadata(todo, labels.split(',').map(label => label.trim()).filter(Boolean), dueDate || undefined);
+		}
+	});
 	register('completeTodo', async item => store.setStatus(todoItem(item).todo, 'done'));
 	register('reopenTodo', async item => store.setStatus(todoItem(item).todo, 'open'));
 	register('changeStatus', async item => {

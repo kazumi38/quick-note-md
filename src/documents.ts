@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { posix } from 'path';
 import { lstat } from 'fs/promises';
-import { appendText, ParsedTodo, parseTodoComments, parseTodos, safeFileName, serializeComments, statusInfo, TodoStatus, validateInput } from './core';
+import { appendText, ParsedTodo, parseTodoComments, parseTodos, safeFileName, serializeComments, serializeTodoMetadata, statusInfo, TodoStatus, validateInput } from './core';
 
 export interface TodoRef extends ParsedTodo {
 	uri: vscode.Uri;
@@ -210,7 +210,8 @@ export class DocumentStore {
 
 	private commentRange(document: vscode.TextDocument, comments: ReturnType<typeof parseTodoComments>): { start: number; end: number } | undefined {
 		if (!comments.sourceText) { return undefined; }
-		const line = comments.todoId.lineNumber + 1;
+		const line = document.lineAt(comments.todoId.lineNumber + 1).text.trim().startsWith('<!-- quick-note-md:meta')
+			? comments.todoId.lineNumber + 2 : comments.todoId.lineNumber + 1;
 		if (line >= document.lineCount) { return undefined; }
 		const start = document.offsetAt(new vscode.Position(line, 0));
 		return document.getText().startsWith(comments.sourceText, start)
@@ -245,6 +246,25 @@ export class DocumentStore {
 			const range = this.commentRange(document, comments);
 			if (!range || comment.start === undefined || comment.end === undefined) {
 				throw new Error('コメント境界を認識できないため編集できません。');
+			}
+
+			async setTodoMetadata(ref: TodoRef, labels: readonly string[], dueDate?: string): Promise<number> {
+				return this.serial(ref.uri, async () => {
+					const document = await this.todoDocument(ref);
+					const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+					const lines = document.getText().split(/\r\n|\n|\r/);
+					const metadata = serializeTodoMetadata(labels, dueDate, eol, /^[ \t]*/.exec(ref.raw)?.[0] ?? '');
+					const hasMetadata = lines[ref.line + 1]?.trim().startsWith('<!-- quick-note-md:meta');
+					const startLine = ref.line + 1;
+					const start = document.offsetAt(new vscode.Position(startLine, 0));
+					if (hasMetadata) {
+						const end = document.offsetAt(new vscode.Position(startLine + 1, 0));
+						return this.editNow(document, ref.version, start, end, document.getText().slice(start, end), metadata, false);
+					}
+					const lineEnd = document.lineAt(ref.line).rangeIncludingLineBreak.end;
+					const insertionAt = document.offsetAt(lineEnd);
+					return this.editNow(document, ref.version, insertionAt, insertionAt, '', metadata, false);
+				});
 			}
 			const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
 			const indent = /^[ \t]*/.exec(ref.raw)?.[0] ?? '';

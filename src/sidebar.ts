@@ -19,7 +19,10 @@ export class TodoNode extends vscode.TreeItem {
 		super(todo.text || todo.raw, (todo.comments?.comments.length ?? 0)
 			? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
 		this.id = `${todo.uri.toString()}:${todo.line}`;
-		this.description = `${statusInfo[todo.status].label}${todo.comments?.comments.length ? ` · コメント ${todo.comments.comments.length}件` : ''}`;
+		const labels = todo.labels?.length ? todo.labels.map(label => `🏷 ${label}`).join(' ') : '';
+		const due = todo.dueDate ? ` · 対応日 ${todo.dueDate}${todo.dueDate < new Date().toISOString().slice(0, 10) ? '（期限切れ）' : ''}` : '';
+		this.description = [statusInfo[todo.status].label, labels, due,
+			todo.comments?.comments.length ? `コメント ${todo.comments.comments.length}件` : ''].filter(Boolean).join(' · ');
 		this.tooltip = `${this.description}: ${todo.text}\n${todo.uri.fsPath}:${todo.line + 1}`;
 		this.contextValue = todo.status === 'unknown' ? 'unknownTodo'
 			: todo.status === 'done' ? 'doneTodo' : 'activeTodo';
