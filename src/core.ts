@@ -20,6 +20,17 @@ export interface TodoIdentity {
 	originalText: string;
 }
 
+function parseTodoBody(source: string, todoLine: number): string | undefined {
+	const lines = source.split(/\r\n|\n|\r/);
+	let cursor = todoLine + 1;
+	if (metadataPattern.test(lines[cursor]?.trim() ?? '')) { cursor++; }
+	if (lines[cursor]?.trim() !== bodyStart) { return undefined; }
+	cursor++;
+	const start = cursor;
+	while (cursor < lines.length && lines[cursor].trim() !== bodyEnd) { cursor++; }
+	return cursor < lines.length ? lines.slice(start, cursor).join('\n') : undefined;
+}
+
 export interface TodoComment {
 	id: string;
 	todoId: TodoIdentity;
@@ -63,6 +74,10 @@ export interface ParsedTodo {
 	raw: string;
 	markerStart: number;
 	comments?: TodoCommentSet;
+	/** Optional metadata introduced by QuickNoteMD; old task rows remain valid. */
+	labels?: string[];
+	dueDate?: string;
+	bodyMarkdown?: string;
 }
 
 const markdown = new MarkdownIt({ html: false });
@@ -79,12 +94,12 @@ export function parseTodos(text: string): ParsedTodo[] {
 	let inComment = false;
 	for (let line = 0; line < lines.length; line++) {
 		const trimmed = lines[line].trim();
-		if (trimmed === '<!-- quick-note-md:comments -->' || trimmed === '<!-- quick-note-md:comment -->') {
+		if (trimmed === bodyStart || trimmed === '<!-- quick-note-md:comments -->' || trimmed === '<!-- quick-note-md:comment -->') {
 			inComment = true;
 			excluded.add(line);
-		} else if (trimmed === '<!-- quick-note-md:end-comment -->' || trimmed === '<!-- quick-note-md:end-comments -->') {
+		} else if (trimmed === bodyEnd || trimmed === '<!-- quick-note-md:end-comment -->' || trimmed === '<!-- quick-note-md:end-comments -->') {
 			excluded.add(line);
-			inComment = trimmed !== '<!-- quick-note-md:end-comments -->';
+			inComment = trimmed === '<!-- quick-note-md:end-comment -->';
 		} else if (inComment) {
 			excluded.add(line);
 		}
@@ -110,12 +125,18 @@ export function parseTodos(text: string): ParsedTodo[] {
 			? /^\[([ xXn!i-])\](?:[ \t]+(.*)|$)$/.exec(prefix[2])
 			: null;
 		if (!valid && linkedLines.has(line)) { continue; }
+		const metadata = lines[line + 1]?.trim().match(metadataPattern);
+		const labels = metadata?.[1] ? metadata[1].split(',').map(label => label.trim()).filter(Boolean) : [];
+		const dueDate = metadata?.[2] || undefined;
 		todos.push({
 			line,
 			raw,
 			markerStart,
 			status: valid ? markers.get(valid[1])! : 'unknown',
 			text: valid ? (valid[2] ?? '') : prefix[2],
+			labels,
+			dueDate,
+			bodyMarkdown: parseTodoBody(text, line),
 		});
 	}
 	return todos;
@@ -125,6 +146,9 @@ const commentsStart = '<!-- quick-note-md:comments -->';
 const commentStart = '<!-- quick-note-md:comment -->';
 const commentEnd = '<!-- quick-note-md:end-comment -->';
 const commentsEnd = '<!-- quick-note-md:end-comments -->';
+const metadataPattern = /^<!--\s*quick-note-md:meta(?:\s+labels="([^"]*)")?(?:\s+due="([^"]*)")?\s*-->$/;
+const bodyStart = '<!-- quick-note-md:body -->';
+const bodyEnd = '<!-- quick-note-md:end-body -->';
 
 function lineOffsets(source: string): number[] {
 	const offsets: number[] = [0];
@@ -140,7 +164,12 @@ export function parseTodoComments(source: string, todo: ParsedTodo, filePath = '
 	const offsets = lineOffsets(source);
 	const id: TodoIdentity = { filePath, lineNumber: todo.line, originalText: todo.raw };
 	const empty: TodoCommentSet = { todoId: id, comments: [], sourceText: '', readOnly: false };
-	const first = todo.line + 1;
+	let first = todo.line + 1;
+	if (metadataPattern.test(lines[first]?.trim() ?? '')) { first++; }
+	if (lines[first]?.trim() === bodyStart) {
+		while (first < lines.length && lines[first].trim() !== bodyEnd) { first++; }
+		first++;
+	}
 	if (first >= lines.length || lines[first].trim() !== commentsStart) {
 		return empty;
 	}
@@ -185,6 +214,19 @@ export function serializeComments(comments: readonly string[], eol = '\n', inden
 		...comments.flatMap(body => [`${indent}${commentStart}`, ...body.replace(/\r\n|\r|\n/g, '\n').split('\n').map(line => `${indent}${line}`), `${indent}${commentEnd}`]),
 		`${indent}${commentsEnd}`,
 	].join(eol);
+}
+
+export function serializeTodoMetadata(labels: readonly string[] = [], dueDate?: string, eol = '\n', indent = ''): string {
+	const safeLabels = labels.map(label => label.trim()).filter(Boolean).filter((label, index, all) => all.indexOf(label) === index);
+	const attrs = [
+		safeLabels.length ? ` labels="${safeLabels.join(',')}"` : '',
+		dueDate?.trim() ? ` due="${dueDate.trim()}"` : '',
+	].join('');
+	return `${indent}<!-- quick-note-md:meta${attrs} -->${eol}`;
+}
+
+export function serializeTodoBody(body: string, eol = '\n', indent = ''): string {
+	return [`${indent}${bodyStart}`, ...body.replace(/\r\n|\r|\n/g, '\n').split('\n').map(line => `${indent}${line}`), `${indent}${bodyEnd}`].join(eol);
 }
 
 export function safeFileName(title: string): string {

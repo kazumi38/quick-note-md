@@ -168,12 +168,12 @@
 			dirty.element.focus();
 			return;
 		}
-		if (['insertParagraph', 'insertLineBreak', 'insertFromDrop', 'historyUndo', 'historyRedo'].includes(event.inputType)) {
+		if (['insertFromDrop', 'historyUndo', 'historyRedo'].includes(event.inputType)) {
 			event.preventDefault();
 			if (event.inputType.startsWith('history')) {
 				history(event.inputType === 'historyUndo' ? 'undo' : 'redo');
 			} else {
-				message('改行や構造の編集には「生 Markdown を表示」を使用してください。', true);
+				message('ドロップ編集には「生 Markdown を表示」を使用してください。', true);
 			}
 		} else if (element.textContent.length + (event.data?.length || 0) > maxLength) {
 			event.preventDefault();
@@ -192,8 +192,8 @@
 		const element = event.target.closest('.editable');
 		const text = event.clipboardData.getData('text/plain');
 		if (!element || recovered || (dirty && dirty.element !== element)) { return; }
-		if (/[\r\n]/.test(text) || element.textContent.length + text.length > maxLength) {
-			message('一行の本文のみ貼り付けできます。生 Markdown を使用してください。', true);
+		if (element.textContent.length + text.length > maxLength) {
+			message('入力が長すぎます。生 Markdown を使用してください。', true);
 			return;
 		}
 		const selection = window.getSelection();
