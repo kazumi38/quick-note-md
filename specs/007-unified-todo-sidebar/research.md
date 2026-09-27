@@ -17,9 +17,9 @@
 <!-- quick-note-md:end-comments -->
 ```
 
-**Rationale**: 現行コードは Todo 行直後のメタデータ、本文、コメント境界を既に保守的に解析できる。
-通常の Markdown は拡張機能なしでも読め、HTML コメントは機械的境界を明示しつつ表示を汚さない。
-Todo 行、インデント、改行コードを保持した最小範囲置換に適合する。
+**Rationale**: 通常の Markdown は拡張機能なしでも読め、HTML コメントは機械的境界を明示しつつ表示を
+汚さない。Todo 行、インデント、改行コードを保持した最小範囲置換に適合する。旧形式の拡張ブロックは
+互換対象とせず、未知・破損形式を安全に編集停止する。
 
 **Alternatives considered**:
 
@@ -52,32 +52,44 @@ VS Code のリソース設定に保存する。同名のラベルは管理対象
 - 色を各 Todo のメタデータに保存: 同名ラベルの色が分岐し、ワークスペース共有の要件を満たさない。
 - 自動色割当のみ: ユーザーが分類の視覚的意味を選べない。
 
-## Decision: サイドバーは既存の TreeView を統合して段階的に拡張する
+## Decision: サイドバーに単一の WebviewView を置く
 
-**Decision**: ファイル設定/メモと Todo を同一の Activity Bar コンテナー内に残し、Todo は状態グループ
-配下の折りたたみノードとして表示する。展開時は本文ノード、リプライ群、属性・保存状態を示す。
+**Decision**: `WebviewViewProvider` を既存の QuickNoteMD Activity Bar コンテナーに登録し、ファイル/
+メモ、状態別 Todo、展開可能な詳細、本文/リプライ編集を同じ WebviewView に表示する。編集操作は
+サイドバー内で完結し、中央エディタの切替を要求しない。
 
-**Rationale**: 既存の TreeDataProvider、キーボード操作、アクセシビリティ説明、更新スケジュールを
-再利用できる。別 Webview サイドバーを新設するより低リスクである。
+**Rationale**: 同じ編集面で連続入力・ライブ Markdown 表示と Todo 一覧操作を提供できる。VS Code の
+拡張 API と CSP 制約内で構築し、TreeView 相当のフォーカス移動、キーボード操作、アクセシビリティ
+名を明示的に実装する。
 
 **Alternatives considered**:
 
-- 全面 Webview 化: ライブ編集には柔軟だが、TreeView の VS Code ネイティブなキーボード/アクセシビリティ
-を作り直す必要がある。
-- Todo をメモと別コンテナーに残す: 「同一サイドバーで完結」の情報構造を満たさない。
+- TreeView と編集用 CustomTextEditor の併用: 中央エディタの表示対象を切り替えずサイドバーで完結する要件を満たせない。
+- Todo をメモと別ビューに残す: 「同一サイドバーで完結」の情報構造を満たさない。
 
 ## Decision: 本文・リプライのライブ編集は Webview draft と明示保存を分離する
 
-**Decision**: Webview は入力中の draft とプレビューをローカルに保持し、保存ボタン/コマンドだけが
-DocumentStore に書き込む。保存前に文書バージョン、対象範囲、ディスク内容を検証する。
+**Decision**: Webview は入力中の draft とプレビューを表示し、ホスト側 `DraftStore` は draft を
+拡張機能の `globalStorageUri` 配下の一時 JSON ファイルへ保管する。WebviewView の非表示、再生成、
+拡張機能/VS Code 再起動後に draft を復元する。保存ボタンだけが DocumentStore に書き込み、
+保存前に文書バージョン、対象範囲、ディスク内容を検証する。保存完了または明示破棄でバックアップを
+削除し、競合・対象不明時は自動適用せずユーザーの判断を待つ。
+
+**Restore validation**: Draft snapshot には edit target kind (`body`, `reply`, `attributes`)、draft value、
+Todo 元行テキスト、編集対象ブロックの保存時テキストを含める。プロセス再起動後は同じ文書内の Todo
+元行テキストを再走査し、対象が一意で、対象範囲の保存時テキストが一致する場合だけ復元する。
+一意でない、対象ブロックが変わった、Todo が削除された場合は draft backup を残して競合を表示する。
+`TextDocument.version` は実行セッションをまたいで安定しないため、再起動後の判定には用いず、
+同一セッション中の競合検出に限る。
 
 **Rationale**: 連続入力を可能にしながら、ファイル操作を明示的・競合検出可能に保つ。現在の
-CustomTextEditor の安全な CSP、HTML 無効 Markdown、メッセージ検証の設計を引き継げる。
+Webview の安全な CSP、HTML 無効 Markdown、メッセージ検証の設計を引き継げる。Webview の寿命に依存せず、
+未保存内容を回収可能にする。
 
 **Alternatives considered**:
 
 - 入力ごとの自動保存: 外部編集との競合頻度と破損リスクを増やす。
-- TreeView の InputBox だけを使う: 複数段落、ライブプレビュー、未保存入力の保持を満たせない。
+- Webview のメモリだけに draft を置く: サイドバーを隠したり Webview が再生成されたりすると入力が失われる。
 
 ## Decision: 競合は自動統合しない
 
