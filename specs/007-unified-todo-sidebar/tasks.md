@@ -26,8 +26,8 @@
 
 **Purpose**: 各ストーリーが共有するデータモデル、文書更新の前提、サイドバー WebviewView の実行基盤を確立する。
 
-- [ ] T001 [P] `src\core.ts` に統合 Todo、本文、リプライ、属性、ソース範囲、読み取り専用状態の型を整備し、既存 Todo 状態と識別子を維持する。
-- [ ] T002 `src\documents.ts` に文書バージョン・Todo 元行・対象範囲・ディスク内容を照合してから更新する共有ガードを整備し、非対象範囲と既存改行形式を保持する。あわせて `package.json`、`src\extension.ts`、`src\sidebarView.ts` に最小の `WebviewViewProvider` と `media\sidebar.js`/`media\sidebar.css` の読み込みを登録し、DocumentStore の Todo 一覧を表示して Todo を選択できるホスト基盤を作る。
+- [X] T001 [P] `src\core.ts` に統合 Todo、本文、リプライ、属性、ソース範囲、読み取り専用状態の型を整備し、既存 Todo 状態と識別子を維持する。
+- [X] T002 `src\documents.ts` に文書バージョン・Todo 元行・対象範囲・ディスク内容を照合してから更新する共有ガードを整備し、非対象範囲と既存改行形式を保持する。あわせて `package.json`、`src\extension.ts`、`src\sidebarView.ts` に最小の `WebviewViewProvider` と `media\sidebar.js`/`media\sidebar.css` の読み込みを登録し、DocumentStore の Todo 一覧を表示して Todo を選択できるホスト基盤を作る。
 
 **Checkpoint**: 共通モデルと保護付き文書更新がそろった後、ユーザーストーリーを開始できる。
 
@@ -47,12 +47,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] `src\core.ts` に現在の Todo 行・本文・リプライ境界の厳密な解析と直列化を実装し、認識できない旧形式や破損構造を自動変換せず読み取り専用で返す。
-- [ ] T007 [US1] `src\documents.ts` に Todo 本文・リプライの作成、編集、追加を対象範囲だけ置換する明示保存操作として実装し、保存失敗・競合時に書き込まず理由を返す。
-- [ ] T008 [US1] `src\documents.ts` に Reply ID で指定したリプライだけを削除する操作と、Todo 行・属性・本文・全リプライを一括削除する操作を実装し、書き込み前に確認後の参照・範囲を再検証する。
+- [X] T006 [US1] `src\core.ts` に現在の Todo 行・本文・リプライ境界の厳密な解析と直列化を実装し、認識できない旧形式や破損構造を自動変換せず読み取り専用で返す。
+- [X] T007 [US1] `src\documents.ts` に Todo 本文・リプライの作成、編集、追加を対象範囲だけ置換する明示保存操作として実装し、保存失敗・競合時に書き込まず理由を返す。
+- [X] T008 [US1] `src\documents.ts` に Reply ID で指定したリプライだけを削除する操作と、Todo 行・属性・本文・全リプライを一括削除する操作を実装し、書き込み前に確認後の参照・範囲を再検証する。
 - [ ] T009 [US1] `src\editor.ts` と `src\drafts.ts` に Todo 本文・リプライ・属性用の draft、dirty/saving/conflict/failed 状態、および `globalStorageUri` 下の一時 JSON バックアップ作成・復元・削除を実装する。属性 draft はラベルと対応日の編集値を保存し、ストレージ失敗時もメモリ上の入力を保持してエラーを通知する。
 - [ ] T010 [US1] `media\sidebar.js` と `media\sidebar.css` に複数行の本文・リプライ編集欄、リプライ追加・編集・削除操作、保存状態表示、生 Markdown へのサイドバー内導線を実装する。
-- [ ] T011 [US1] `src\extension.ts` と `package.json` に本文・リプライ編集およびリプライ/Todo 削除コマンドを登録し、削除確認には対象と削除される関連内容を明記してキャンセル時は保存しない。
+- [X] T011 [US1] `src\extension.ts` と `package.json` に本文・リプライ編集およびリプライ/Todo 削除コマンドを登録し、削除確認には対象と削除される関連内容を明記してキャンセル時は保存しない。
 
 **Checkpoint**: Todo の記録・明示保存・確認付き削除を、他の Todo と状態を変更せず単独で検証できる。
 
@@ -110,7 +110,7 @@
 
 ### Implementation for User Story 4
 
-- [ ] T021 [US4] `src\core.ts` に属性の解析・直列化・入力検証を実装し、data-model.md の制約「`labels` と `due` だけを受け付ける」「ラベルは前後空白を除き、空値・同一表記の重複を除外する」「`YYYY-MM-DD` または未設定」を適用し、無効日付を読み取り専用にする。
+- [X] T021 [US4] `src\core.ts` に属性の解析・直列化・入力検証を実装し、data-model.md の制約「`labels` と `due` だけを受け付ける」「ラベルは前後空白を除き、空値・同一表記の重複を除外する」「`YYYY-MM-DD` または未設定」を適用し、無効日付を読み取り専用にする。
 - [ ] T022 [US4] `src\documents.ts` にラベル・対応日だけを更新する競合保護付き保存操作を追加し、Todo 行、本文、リプライ、状態、他 Todo を変更しない。
 - [ ] T023 [US4] `src\extension.ts`、`src\sidebar.ts`、`src\configuration.ts`、`package.json` に複数ラベルの追加/削除、固定パレット色選択、対応日の設定/変更/解除を実装し、リソース設定へワークスペース共有色を保存する。
 - [ ] T024 [US4] `src\sidebar.ts` にローカル暦日で期限切れ/期限内/未設定を判定し、完了済み Todo は期限切れ強調しない表示を実装する。

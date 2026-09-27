@@ -49,6 +49,10 @@
     "views": {
       "quick-note-md": [
         {
+          "id": "quick-note-md.sidebar",
+          "name": "Todo とメモ"
+        },
+        {
           "id": "quick-note-md.memos",
           "name": "メモ"
         },
@@ -94,6 +98,16 @@
         "command": "quick-note-md.addTodoComment",
         "title": "QuickNoteMD: Todo コメントを追加",
         "icon": "$(comment)"
+      },
+      {
+        "command": "quick-note-md.editTodoBody",
+        "title": "QuickNoteMD: Todo 本文を編集",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "quick-note-md.deleteTodoComment",
+        "title": "QuickNoteMD: リプライを削除",
+        "icon": "$(trash)"
       },
       {
         "command": "quick-note-md.editTodoComment",

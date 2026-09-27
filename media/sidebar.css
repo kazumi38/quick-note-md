@@ -1,0 +1,7 @@
+:root { color-scheme: light dark; }
+body { padding: 8px; font-family: var(--vscode-font-family); color: var(--vscode-foreground); }
+h2 { font-size: 1em; }
+.todo { border-bottom: 1px solid var(--vscode-panel-border); padding: 4px 0; }
+.todo-title { width: 100%; text-align: left; color: inherit; background: transparent; border: 0; padding: 6px; cursor: pointer; }
+.todo-title:focus-visible, button:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
+.todo-detail { padding: 4px 8px 8px; white-space: pre-wrap; }
