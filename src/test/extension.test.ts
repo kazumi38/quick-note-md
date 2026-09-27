@@ -60,15 +60,18 @@ suite('Extension commands', () => {
 		assert.ok(memo);
 		await vscode.commands.executeCommand('quick-note-md.appendMemo', memo.uri);
 		const created = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(notesRoot(), '日本語メモ.md'));
-		assert.strictEqual(created.getText(), '# 日本語メモ\n追記\n');
+		assert.strictEqual(created.getText().replace(/\r\n/g, '\n'), '# 日本語メモ\n追記\n');
 	});
 
 	test('newTodo, status changes, delete, and showSource follow the command contract', async () => {
+		const errors: string[] = [];
 		queueInput('確認タスク');
 		patchWindow('showWarningMessage', (async () => '削除') as typeof vscode.window.showWarningMessage);
+		patchWindow('showErrorMessage', (async (message: string) => { errors.push(message); }) as typeof vscode.window.showErrorMessage);
 		await vscode.commands.executeCommand('quick-note-md.newTodo');
 		let todo = (await store.todos())[0];
 		await vscode.commands.executeCommand('quick-note-md.completeTodo', new TodoNode(todo));
+		assert.deepStrictEqual(errors, []);
 		todo = (await store.todos())[0];
 		assert.strictEqual(todo.status, 'done');
 		await vscode.commands.executeCommand('quick-note-md.showSource', new TodoNode(todo));

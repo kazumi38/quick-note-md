@@ -20,15 +20,33 @@ export interface TodoIdentity {
 	originalText: string;
 }
 
-function parseTodoBody(source: string, todoLine: number): string | undefined {
+function parseTodoBody(source: string, todoLine: number): { value?: string; readOnly: boolean; warning?: string } {
 	const lines = source.split(/\r\n|\n|\r/);
+	const ownerIndent = todoListIndent(lines[todoLine]);
 	let cursor = todoLine + 1;
 	if (metadataPattern.test(lines[cursor]?.trim() ?? '')) { cursor++; }
-	if (lines[cursor]?.trim() !== bodyStart) { return undefined; }
+	if (lines[cursor]?.trim() !== bodyStart) {
+		return lines[cursor]?.trim().startsWith('<!-- quick-note-md:body')
+			? { readOnly: true, warning: '本文境界を認識できないため、読み取り専用です。' }
+			: { readOnly: false };
+	}
 	cursor++;
 	const start = cursor;
-	while (cursor < lines.length && lines[cursor].trim() !== bodyEnd) { cursor++; }
-	return cursor < lines.length ? lines.slice(start, cursor).join('\n') : undefined;
+	while (cursor < lines.length && lines[cursor].trim() !== bodyEnd) {
+		if (ownerIndent !== undefined && todoListIndent(lines[cursor]) === ownerIndent) {
+			return { readOnly: true, warning: '本文境界が後続 Todo と交差するため、読み取り専用です。' };
+		}
+		cursor++;
+	}
+	return cursor < lines.length
+		? { value: lines.slice(start, cursor).join('\n'), readOnly: false }
+		: { readOnly: true, warning: '本文の終了境界がないため、読み取り専用です。' };
+}
+
+function todoListIndent(line: string | undefined): string | undefined {
+	if (line === undefined) { return undefined; }
+	const match = /^([ \t]*)(?:[-+*]|\d+[.)])[ \t]+\[[^\]]*\](?:[ \t]+.*|$)$/.exec(line);
+	return match?.[1];
 }
 
 export interface TodoComment {
@@ -42,6 +60,8 @@ export interface TodoComment {
 	start?: number;
 	end?: number;
 }
+
+export type TodoReply = TodoComment;
 
 export interface TodoCommentSet {
 	todoId: TodoIdentity;
@@ -78,6 +98,9 @@ export interface ParsedTodo {
 	labels?: string[];
 	dueDate?: string;
 	bodyMarkdown?: string;
+	replies?: TodoReply[];
+	readOnly?: boolean;
+	warning?: string;
 }
 
 const markdown = new MarkdownIt({ html: false });
@@ -128,7 +151,8 @@ export function parseTodos(text: string): ParsedTodo[] {
 		const metadata = lines[line + 1]?.trim().match(metadataPattern);
 		const labels = metadata?.[1] ? metadata[1].split(',').map(label => label.trim()).filter(Boolean) : [];
 		const dueDate = metadata?.[2] || undefined;
-		todos.push({
+		const body = parseTodoBody(text, line);
+		const parsed: ParsedTodo = {
 			line,
 			raw,
 			markerStart,
@@ -136,8 +160,19 @@ export function parseTodos(text: string): ParsedTodo[] {
 			text: valid ? (valid[2] ?? '') : prefix[2],
 			labels,
 			dueDate,
-			bodyMarkdown: parseTodoBody(text, line),
-		});
+			bodyMarkdown: body.value,
+			readOnly: body.readOnly || (dueDate !== undefined && !isValidDueDate(dueDate)),
+			warning: body.warning || (dueDate !== undefined && !isValidDueDate(dueDate) ? '対応日が無効なため、読み取り専用です。' : undefined),
+		};
+		todos.push(parsed);
+	}
+	for (const todo of todos) {
+		const comments = parseTodoComments(text, todo);
+		todo.replies = comments.comments;
+		if (comments.readOnly) {
+			todo.readOnly = true;
+			todo.warning = comments.warning;
+		}
 	}
 	return todos;
 }
@@ -158,6 +193,18 @@ function lineOffsets(source: string): number[] {
 	return offsets;
 }
 
+export function isValidDueDate(value: string): boolean {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) { return false; }
+	const [year, month, day] = value.split('-').map(Number);
+	const date = new Date(Date.UTC(year, month - 1, day));
+	return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+export function normalizeLabels(labels: readonly string[]): string[] {
+	return labels.map(label => label.trim()).filter(Boolean)
+		.filter((label, index, all) => all.indexOf(label) === index);
+}
+
 /** Parse only a comment block immediately following the Todo line. */
 export function parseTodoComments(source: string, todo: ParsedTodo, filePath = ''): TodoCommentSet {
 	const lines = source.split(/\r\n|\n|\r/);
@@ -171,6 +218,10 @@ export function parseTodoComments(source: string, todo: ParsedTodo, filePath = '
 		first++;
 	}
 	if (first >= lines.length || lines[first].trim() !== commentsStart) {
+		const next = lines[first]?.trim() ?? '';
+		if (next.startsWith('<!-- quick-note-md:') || next.startsWith('<!-- legacy-quick-note-md:')) {
+			return { ...empty, sourceText: lines.slice(first).join('\n'), readOnly: true, warning: 'Todo の拡張ブロックを認識できないため、読み取り専用です。' };
+		}
 		return empty;
 	}
 	let cursor = first + 1;
@@ -217,7 +268,13 @@ export function serializeComments(comments: readonly string[], eol = '\n', inden
 }
 
 export function serializeTodoMetadata(labels: readonly string[] = [], dueDate?: string, eol = '\n', indent = ''): string {
-	const safeLabels = labels.map(label => label.trim()).filter(Boolean).filter((label, index, all) => all.indexOf(label) === index);
+	const safeLabels = normalizeLabels(labels);
+	if (safeLabels.some(label => /[,"\r\n\u0000]/.test(label))) {
+		throw new Error('ラベル名にカンマ、引用符、改行は使用できません。');
+	}
+	if (dueDate !== undefined && dueDate !== '' && !isValidDueDate(dueDate.trim())) {
+		throw new Error('対応日は有効な YYYY-MM-DD 形式で指定してください。');
+	}
 	const attrs = [
 		safeLabels.length ? ` labels="${safeLabels.join(',')}"` : '',
 		dueDate?.trim() ? ` due="${dueDate.trim()}"` : '',

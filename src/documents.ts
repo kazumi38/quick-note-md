@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { posix } from 'path';
+import { posix, relative as pathRelative, isAbsolute as pathIsAbsolute } from 'path';
 import { lstat } from 'fs/promises';
-import { appendText, ParsedTodo, parseTodoComments, parseTodos, safeFileName, serializeComments, serializeTodoMetadata, statusInfo, TodoStatus, validateInput } from './core';
+import { appendText, ParsedTodo, parseTodoComments, parseTodos, safeFileName, serializeComments, serializeTodoBody, serializeTodoMetadata, statusInfo, TodoStatus, validateInput } from './core';
 
 export interface TodoRef extends ParsedTodo {
 	uri: vscode.Uri;
@@ -31,9 +31,11 @@ export class DocumentStore {
 
 	private async guard(uri: vscode.Uri, allowMissing = false): Promise<vscode.FileStat | undefined> {
 		const root = this.getRoot();
-		const relative = posix.relative(root.path, uri.path);
+		const relative = uri.scheme === 'file' && root.scheme === 'file'
+			? pathRelative(root.fsPath, uri.fsPath).replace(/\\/g, '/')
+			: posix.relative(root.path, uri.path);
 		if (uri.scheme !== root.scheme || uri.authority !== root.authority || uri.query || uri.fragment ||
-			relative === '..' || relative.startsWith('../') || posix.isAbsolute(relative)) {
+			relative === '..' || relative.startsWith('../') || pathIsAbsolute(relative)) {
 			throw new Error('保存先フォルダーの外は変更できません。');
 		}
 		let last: vscode.FileStat | undefined;
@@ -194,10 +196,41 @@ export class DocumentStore {
 			throw new Error('Todo が変更されました。一覧を更新して再実行してください。');
 		}
 		const actual = parseTodos(document.getText()).find(todo => todo.line === ref.line);
-		if (!actual || actual.status === 'unknown' || actual.markerStart !== ref.markerStart || actual.status !== ref.status) {
-			throw new Error('この Todo は安全に変更できません。Markdown で編集してください。');
+		if (!actual || actual.status === 'unknown' || actual.readOnly || actual.markerStart !== ref.markerStart || actual.status !== ref.status) {
+			throw new Error(actual?.warning ?? 'この Todo は安全に変更できません。Markdown で編集してください。');
 		}
 		return document;
+	}
+
+	private extensionRange(document: vscode.TextDocument, ref: TodoRef): { start: number; end: number } | undefined {
+		const lines = document.getText().split(/\r\n|\n|\r/);
+		let line = ref.line + 1;
+		if (lines[line]?.trim().startsWith('<!-- quick-note-md:meta')) { line++; }
+		if (lines[line]?.trim() === '<!-- quick-note-md:body -->') {
+			while (line < lines.length && lines[line]?.trim() !== '<!-- quick-note-md:end-body -->') { line++; }
+			if (line >= lines.length) { return undefined; }
+			line++;
+		}
+		if (lines[line]?.trim() === '<!-- quick-note-md:comments -->') {
+			while (line < lines.length && lines[line]?.trim() !== '<!-- quick-note-md:end-comments -->') { line++; }
+			if (line >= lines.length) { return undefined; }
+			line++;
+		}
+		if (line === ref.line + 1) { return undefined; }
+		const start = document.offsetAt(new vscode.Position(ref.line + 1, 0));
+		return { start, end: document.offsetAt(new vscode.Position(line, 0)) };
+	}
+
+	/** Offset right after any existing meta/body blocks, i.e. where a comments block belongs if one is absent. */
+	private metaBodyEndOffset(document: vscode.TextDocument, ref: TodoRef): number {
+		const lines = document.getText().split(/\r\n|\n|\r/);
+		let line = ref.line + 1;
+		if (lines[line]?.trim().startsWith('<!-- quick-note-md:meta')) { line++; }
+		if (lines[line]?.trim() === '<!-- quick-note-md:body -->') {
+			while (line < lines.length && lines[line]?.trim() !== '<!-- quick-note-md:end-body -->') { line++; }
+			line++;
+		}
+		return document.offsetAt(new vscode.Position(line, 0));
 	}
 
 	private todoComments(document: vscode.TextDocument, ref: TodoRef) {
@@ -210,12 +243,44 @@ export class DocumentStore {
 
 	private commentRange(document: vscode.TextDocument, comments: ReturnType<typeof parseTodoComments>): { start: number; end: number } | undefined {
 		if (!comments.sourceText) { return undefined; }
-		const line = document.lineAt(comments.todoId.lineNumber + 1).text.trim().startsWith('<!-- quick-note-md:meta')
-			? comments.todoId.lineNumber + 2 : comments.todoId.lineNumber + 1;
-		if (line >= document.lineCount) { return undefined; }
+		const lines = document.getText().split(/\r\n|\n|\r/);
+		let line = comments.todoId.lineNumber + 1;
+		if (lines[line]?.trim().startsWith('<!-- quick-note-md:meta')) { line++; }
+		if (lines[line]?.trim() === '<!-- quick-note-md:body -->') {
+			while (line < lines.length && lines[line]?.trim() !== '<!-- quick-note-md:end-body -->') { line++; }
+			line++;
+		}
+		if (lines[line]?.trim() !== '<!-- quick-note-md:comments -->') { return undefined; }
 		const start = document.offsetAt(new vscode.Position(line, 0));
-		return document.getText().startsWith(comments.sourceText, start)
-			? { start, end: start + comments.sourceText.length } : undefined;
+		let endLine = line;
+		while (endLine < lines.length && lines[endLine]?.trim() !== '<!-- quick-note-md:end-comments -->') { endLine++; }
+		if (endLine >= lines.length) { return undefined; }
+		endLine++;
+		return { start, end: document.offsetAt(new vscode.Position(endLine, 0)) };
+	}
+
+	async editTodoBody(ref: TodoRef, text: string): Promise<number> {
+		return this.serial(ref.uri, async () => {
+			const document = await this.todoDocument(ref);
+			const actual = parseTodos(document.getText()).find(todo => todo.line === ref.line);
+			if (!actual || actual.readOnly) { throw new Error(actual?.warning ?? '本文を安全に編集できません。'); }
+			const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+			const indent = /^[ \t]*/.exec(ref.raw)?.[0] ?? '';
+			const lines = document.getText().split(/\r\n|\n|\r/);
+			let bodyLine = ref.line + 1;
+			if (lines[bodyLine]?.trim().startsWith('<!-- quick-note-md:meta')) { bodyLine++; }
+			if (lines[bodyLine]?.trim() === '<!-- quick-note-md:body -->') {
+				let endLine = bodyLine;
+				while (endLine < lines.length && lines[endLine]?.trim() !== '<!-- quick-note-md:end-body -->') { endLine++; }
+				if (endLine >= lines.length) { throw new Error('本文境界を認識できないため編集できません。'); }
+				const start = document.offsetAt(new vscode.Position(bodyLine, 0));
+				const end = document.offsetAt(new vscode.Position(endLine + 1, 0));
+				return this.editNow(document, ref.version, start, end, document.getText().slice(start, end), serializeTodoBody(text, eol, indent) + eol, false);
+			}
+			const insertAt = document.offsetAt(new vscode.Position(bodyLine, 0));
+			const prefix = insertAt === document.getText().length && !document.getText().endsWith('\n') ? eol : '';
+			return this.editNow(document, ref.version, insertAt, insertAt, '', prefix + serializeTodoBody(text, eol, indent) + eol, false);
+		});
 	}
 
 	async addTodoComment(ref: TodoRef, text: string): Promise<number> {
@@ -228,10 +293,15 @@ export class DocumentStore {
 			const body = comments.comments.map(comment => comment.bodyMarkdown);
 			body.push(text);
 			const block = serializeComments(body, eol, indent);
-			const lineRange = document.lineAt(ref.line).rangeIncludingLineBreak;
-			const insertionAt = document.offsetAt(lineRange.end);
-			const needsLeadingEol = insertionAt === document.getText().length && !document.getText().endsWith('\n');
-			const insertion = (needsLeadingEol ? eol : '') + block + (insertionAt < document.getText().length ? eol : '');
+			const existing = this.commentRange(document, comments);
+			if (existing) {
+				return this.editNow(document, ref.version, existing.start, existing.end, document.getText().slice(existing.start, existing.end), block + eol, false);
+			}
+			// No comments block yet: insert right after any existing meta/body blocks, not blindly after the Todo's own line.
+			const insertionAt = this.metaBodyEndOffset(document, ref);
+			const source = document.getText();
+			const needsLeadingEol = insertionAt === source.length && !source.endsWith('\n');
+			const insertion = (needsLeadingEol ? eol : '') + block + (insertionAt < source.length ? eol : '');
 			return this.editNow(document, ref.version, insertionAt, insertionAt, '', insertion, false);
 		});
 	}
@@ -252,6 +322,21 @@ export class DocumentStore {
 			const indent = /^[ \t]*/.exec(ref.raw)?.[0] ?? '';
 			const bodies = comments.comments.map(candidate => candidate.id === commentId ? text : candidate.bodyMarkdown);
 			return this.editNow(document, ref.version, range.start, range.end, document.getText().slice(range.start, range.end), serializeComments(bodies, eol, indent), false);
+		});
+	}
+
+	async deleteTodoComment(ref: TodoRef, commentId: string): Promise<number> {
+		return this.serial(ref.uri, async () => {
+			const document = await this.todoDocument(ref);
+			const { comments } = this.todoComments(document, ref);
+			if (!comments.comments.some(comment => comment.id === commentId)) { throw new Error('コメントが見つかりません。'); }
+			const range = this.commentRange(document, comments);
+			if (!range) { throw new Error('コメント境界を認識できないため削除できません。'); }
+			const remaining = comments.comments.filter(comment => comment.id !== commentId).map(comment => comment.bodyMarkdown);
+			const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+			const indent = /^[ \t]*/.exec(ref.raw)?.[0] ?? '';
+			const replacement = remaining.length ? serializeComments(remaining, eol, indent) + eol : '';
+			return this.editNow(document, ref.version, range.start, range.end, document.getText().slice(range.start, range.end), replacement, false);
 		});
 	}
 
@@ -290,9 +375,8 @@ export class DocumentStore {
 			const lineRange = document.lineAt(ref.line).rangeIncludingLineBreak;
 			let start = document.offsetAt(lineRange.start);
 			let end = document.offsetAt(lineRange.end);
-			const block = this.commentRange(document, comments);
+			const block = this.extensionRange(document, ref);
 			if (block) {
-				start = Math.min(start, block.start);
 				end = block.end;
 				if (document.getText()[end] === '\r') { end++; }
 				if (document.getText()[end] === '\n') { end++; }

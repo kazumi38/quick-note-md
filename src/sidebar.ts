@@ -2,6 +2,25 @@ import * as vscode from 'vscode';
 import { statusInfo, statusOrder, TodoStatus } from './core';
 import { DocumentStore, TodoRef } from './documents';
 
+export function todoRefFromNode(value: unknown): TodoRef | undefined {
+	if (!value || typeof value !== 'object' || !('todo' in value)) { return undefined; }
+	const todo = value.todo;
+	if (!todo || typeof todo !== 'object' || !('uri' in todo) || !('line' in todo) || !('raw' in todo) ||
+		!('text' in todo) || !('status' in todo) || !('markerStart' in todo) || !('version' in todo)) { return undefined; }
+	if (!(todo.uri instanceof vscode.Uri) || !Number.isInteger(todo.line) || typeof todo.raw !== 'string' ||
+		typeof todo.text !== 'string' || typeof todo.status !== 'string' || !Object.hasOwn(statusInfo, todo.status) ||
+		!Number.isInteger(todo.markerStart) || !Number.isInteger(todo.version)) { return undefined; }
+	return todo as TodoRef;
+}
+
+export function isCommentNode(value: unknown): value is CommentNode {
+	if (!value || typeof value !== 'object' || !('comment' in value)) { return false; }
+	const comment = value.comment;
+	return !!todoRefFromNode(value) && !!comment && typeof comment === 'object' &&
+		'id' in comment && typeof comment.id === 'string' &&
+		'bodyMarkdown' in comment && typeof comment.bodyMarkdown === 'string';
+}
+
 export class MemoNode extends vscode.TreeItem {
 	constructor(public readonly uri: vscode.Uri, title: string, mtime: number) {
 		super(title);
