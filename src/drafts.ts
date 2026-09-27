@@ -66,9 +66,15 @@ export class DraftStore {
 			try {
 				const data = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.storage, name));
 				const parsed: unknown = JSON.parse(Buffer.from(data).toString('utf8'));
-				if (parsed && typeof parsed === 'object' && typeof (parsed as { backupKey?: unknown }).backupKey === 'string') {
-					snapshots.push(parsed as DraftSnapshot);
-				}
+				if (!parsed || typeof parsed !== 'object') { continue; }
+				const snapshot = parsed as Partial<DraftSnapshot>;
+				if (typeof snapshot.backupKey !== 'string' ||
+					!['body', 'reply', 'attributes'].includes(snapshot.kind ?? '') ||
+					typeof snapshot.baseSource !== 'string' ||
+					typeof snapshot.todoIdentity?.filePath !== 'string' ||
+					typeof snapshot.todoIdentity.originalText !== 'string' ||
+					name !== this.uri(snapshot.backupKey).path.split('/').pop()) { continue; }
+				snapshots.push(snapshot as DraftSnapshot);
 			} catch { /* Corrupt or unreadable backups are skipped, never surfaced as data loss. */ }
 		}
 		return snapshots;

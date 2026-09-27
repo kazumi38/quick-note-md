@@ -277,8 +277,7 @@ export class DocumentStore {
 				const end = document.offsetAt(new vscode.Position(endLine + 1, 0));
 				return this.editNow(document, ref.version, start, end, document.getText().slice(start, end), serializeTodoBody(text, eol, indent) + eol, false);
 			}
-			const lineEnd = document.lineAt(ref.line).rangeIncludingLineBreak.end;
-			const insertAt = document.offsetAt(lineEnd);
+			const insertAt = document.offsetAt(new vscode.Position(bodyLine, 0));
 			const prefix = insertAt === document.getText().length && !document.getText().endsWith('\n') ? eol : '';
 			return this.editNow(document, ref.version, insertAt, insertAt, '', prefix + serializeTodoBody(text, eol, indent) + eol, false);
 		});

@@ -43,13 +43,28 @@ export function reconcileDrafts(
 			todo.uri.fsPath === snapshot.todoIdentity.filePath && todo.raw === snapshot.todoIdentity.originalText);
 		if (matches.length !== 1) { return { todoKey: undefined, snapshot, state: 'conflict' }; }
 		const [todo] = matches;
+		if (snapshot.kind === 'reply' && snapshot.replyId &&
+			!todo.comments?.comments.some(comment => comment.id === snapshot.replyId)) {
+			return { todoKey: undefined, snapshot, state: 'conflict' };
+		}
 		const current = currentBaseSource(todo, snapshot.kind, snapshot.replyId);
 		return { todoKey: todoKey(todo), snapshot, state: current === snapshot.baseSource ? 'dirty' : 'conflict' };
 	});
 }
 
 export class DraftManager {
+	private readonly pending = new Map<string, Promise<void>>();
 	constructor(private readonly store: DraftStore) {}
+
+	private serial(key: string, action: () => Promise<void>): Promise<void> {
+		const previous = this.pending.get(key) ?? Promise.resolve();
+		const next = previous.catch(() => undefined).then(action);
+		this.pending.set(key, next);
+		void next.finally(() => {
+			if (this.pending.get(key) === next) { this.pending.delete(key); }
+		}).catch(() => undefined);
+		return next;
+	}
 
 	async reconcile(todos: readonly TodoRef[], todoKey: (todo: TodoRef) => string): Promise<ReconciledDraft[]> {
 		return reconcileDrafts(await this.store.list(), todos, todoKey);
@@ -61,16 +76,21 @@ export class DraftManager {
 		replyId?: string,
 	): Promise<void> {
 		const target: DraftTarget = { filePath: todo.uri.fsPath, originalText: todo.raw, kind, replyId };
-		const snapshot: DraftSnapshot = {
-			kind, backupKey: draftBackupKey(target), replyId,
-			todoIdentity: { filePath: todo.uri.fsPath, originalText: todo.raw },
-			text: value.text, labels: value.labels, dueDate: value.dueDate,
-			baseSource: currentBaseSource(todo, kind, replyId), state: 'dirty',
-		};
-		await this.store.save(snapshot);
+		const key = draftBackupKey(target);
+		await this.serial(key, async () => {
+			const existing = await this.store.load(key);
+			const snapshot: DraftSnapshot = {
+				kind, backupKey: key, replyId,
+				todoIdentity: { filePath: todo.uri.fsPath, originalText: todo.raw },
+				text: value.text, labels: value.labels, dueDate: value.dueDate,
+				baseSource: existing?.baseSource ?? currentBaseSource(todo, kind, replyId), state: 'dirty',
+			};
+			await this.store.save(snapshot);
+		});
 	}
 
 	async clear(todo: TodoRef, kind: DraftKind, replyId?: string): Promise<void> {
-		await this.store.remove(draftBackupKey({ filePath: todo.uri.fsPath, originalText: todo.raw, kind, replyId }));
+		const key = draftBackupKey({ filePath: todo.uri.fsPath, originalText: todo.raw, kind, replyId });
+		await this.serial(key, () => this.store.remove(key));
 	}
 }

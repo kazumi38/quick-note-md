@@ -17,10 +17,12 @@ export type DueState = 'overdue' | 'upcoming' | 'none';
  */
 export function computeDueState(dueDate: string | undefined, status: TodoStatus, today = new Date()): DueState {
 	if (!dueDate || status === 'done') { return 'none'; }
-	const todayIso = today.toISOString().slice(0, 10);
+	const calendarDay = (date: Date): string =>
+		`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+	const todayIso = calendarDay(today);
 	if (dueDate < todayIso) { return 'overdue'; }
-	const upcoming = new Date(today); upcoming.setUTCDate(upcoming.getUTCDate() + 3);
-	return dueDate <= upcoming.toISOString().slice(0, 10) ? 'upcoming' : 'none';
+	const upcoming = new Date(today); upcoming.setDate(upcoming.getDate() + 3);
+	return dueDate <= calendarDay(upcoming) ? 'upcoming' : 'none';
 }
 
 /** Every message the webview can send; unknown/malformed shapes are ignored rather than trusted. */
@@ -32,12 +34,14 @@ type SidebarMessage =
 	| { kind: 'saveBody'; id: string; text: string }
 	| { kind: 'discardBody'; id: string }
 	| { kind: 'draftBody'; id: string; text: string }
+	| { kind: 'previewBody'; id: string; text: string }
 	| { kind: 'saveAttributes'; id: string; labels: string[]; dueDate?: string }
 	| { kind: 'discardAttributes'; id: string }
 	| { kind: 'draftAttributes'; id: string; labels: string[]; dueDate?: string }
 	| { kind: 'saveReply'; id: string; replyId?: string; text: string }
 	| { kind: 'discardReply'; id: string; replyId?: string }
 	| { kind: 'draftReply'; id: string; replyId?: string; text: string }
+	| { kind: 'previewReply'; id: string; replyId?: string; text: string }
 	| { kind: 'deleteReply'; id: string; replyId: string }
 	| { kind: 'deleteTodo'; id: string }
 	| { kind: 'setLabelColor'; label: string; color: string }
@@ -124,13 +128,30 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 		return typeof id === 'string' && id.length <= 4096 ? this.todos.find(candidate => this.id(candidate) === id) : undefined;
 	}
 
-	private async notify(action: () => Promise<void>): Promise<void> {
+	private async notify(action: () => Promise<unknown>): Promise<boolean> {
 		try {
 			await action();
+			return true;
 		} catch (error) {
 			await vscode.window.showErrorMessage(error instanceof Error ? error.message : '操作を完了できませんでした。');
+			return false;
 		} finally {
 			await this.refresh();
+		}
+	}
+
+	private async finishDraftAction(field: DraftKind, todo: TodoRef, action: 'save' | 'discard',
+		operation: () => Promise<unknown>, replyId?: string): Promise<void> {
+		const success = await this.notify(operation);
+		await this.view?.webview.postMessage({ kind: 'draftResult', field, id: this.id(todo), replyId, action, success });
+	}
+
+	private async changeDraft(todo: TodoRef, kind: DraftKind,
+		value: { text?: string; labels?: string[]; dueDate?: string }, replyId?: string): Promise<void> {
+		try {
+			await this.drafts.change(todo, kind, value, replyId);
+		} catch (error) {
+			await vscode.window.showErrorMessage(`下書きを保存できませんでした: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 
@@ -157,45 +178,51 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 			await this.notify(() => this.store.setStatus(todo, status));
 			return;
 		}
-		if (message.kind === 'draftBody' && typeof message.text === 'string') {
-			await this.drafts.change(todo, 'body', { text: message.text }).catch(() => undefined);
-			await this.view?.webview.postMessage({ kind: 'preview', field: 'body', id: this.id(todo), html: renderSafeMarkdown(message.text) });
+		if ((message.kind === 'draftBody' || message.kind === 'previewBody') && typeof message.text === 'string') {
+			if (message.kind === 'draftBody') { await this.changeDraft(todo, 'body', { text: message.text }); }
+			await this.view?.webview.postMessage({ kind: 'preview', field: 'body', id: this.id(todo), text: message.text, html: renderSafeMarkdown(message.text) });
 			return;
 		}
 		if (message.kind === 'saveBody' && typeof message.text === 'string') {
-			await this.notify(async () => {
+			await this.finishDraftAction('body', todo, 'save', async () => {
 				await this.store.editTodoBody(todo, message.text);
 				await this.drafts.clear(todo, 'body');
 			});
 			return;
 		}
-		if (message.kind === 'discardBody') { await this.notify(() => this.drafts.clear(todo, 'body')); return; }
+		if (message.kind === 'discardBody') {
+			await this.finishDraftAction('body', todo, 'discard', () => this.drafts.clear(todo, 'body')); return;
+		}
 		if (message.kind === 'draftAttributes' && Array.isArray(message.labels)) {
-			await this.drafts.change(todo, 'attributes', { labels: message.labels, dueDate: message.dueDate }).catch(() => undefined);
+			await this.changeDraft(todo, 'attributes', { labels: message.labels, dueDate: message.dueDate });
 			return;
 		}
 		if (message.kind === 'saveAttributes' && Array.isArray(message.labels)) {
-			await this.notify(async () => {
+			await this.finishDraftAction('attributes', todo, 'save', async () => {
 				await this.store.setTodoMetadata(todo, message.labels, message.dueDate);
 				await this.drafts.clear(todo, 'attributes');
 			});
 			return;
 		}
-		if (message.kind === 'discardAttributes') { await this.notify(() => this.drafts.clear(todo, 'attributes')); return; }
-		if (message.kind === 'draftReply' && typeof message.text === 'string') {
-			await this.drafts.change(todo, 'reply', { text: message.text }, message.replyId).catch(() => undefined);
-			await this.view?.webview.postMessage({ kind: 'preview', field: 'reply', id: this.id(todo), replyId: message.replyId, html: renderSafeMarkdown(message.text) });
+		if (message.kind === 'discardAttributes') {
+			await this.finishDraftAction('attributes', todo, 'discard', () => this.drafts.clear(todo, 'attributes')); return;
+		}
+		if ((message.kind === 'draftReply' || message.kind === 'previewReply') && typeof message.text === 'string') {
+			if (message.kind === 'draftReply') { await this.changeDraft(todo, 'reply', { text: message.text }, message.replyId); }
+			await this.view?.webview.postMessage({ kind: 'preview', field: 'reply', id: this.id(todo), replyId: message.replyId, text: message.text, html: renderSafeMarkdown(message.text) });
 			return;
 		}
 		if (message.kind === 'saveReply' && typeof message.text === 'string') {
-			await this.notify(async () => {
+			await this.finishDraftAction('reply', todo, 'save', async () => {
 				if (message.replyId) { await this.store.editTodoComment(todo, message.replyId, message.text); }
 				else { await this.store.addTodoComment(todo, message.text); }
 				await this.drafts.clear(todo, 'reply', message.replyId);
-			});
+			}, message.replyId);
 			return;
 		}
-		if (message.kind === 'discardReply') { await this.notify(() => this.drafts.clear(todo, 'reply', message.replyId)); return; }
+		if (message.kind === 'discardReply') {
+			await this.finishDraftAction('reply', todo, 'discard', () => this.drafts.clear(todo, 'reply', message.replyId), message.replyId); return;
+		}
 		if (message.kind === 'deleteReply' && typeof message.replyId === 'string') {
 			await this.notify(async () => {
 				if (await vscode.window.showWarningMessage('このリプライを削除しますか？', { modal: true }, '削除') !== '削除') { return; }

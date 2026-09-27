@@ -47,6 +47,7 @@ suite('Draft persistence and restart reconciliation', () => {
 				labels: ['x'], baseSource: '{}', state: 'dirty',
 			};
 			await store.save(snapshot);
+			await store.save({ ...snapshot, backupKey: 'malformed', todoIdentity: undefined } as unknown as DraftSnapshot);
 			await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(vscode.Uri.file(directory), 'corrupt.json'), Buffer.from('not json'));
 			await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(vscode.Uri.file(directory), 'ignored.txt'), Buffer.from('irrelevant'));
 			const list = await store.list();
@@ -93,6 +94,18 @@ suite('Draft persistence and restart reconciliation', () => {
 		assert.strictEqual(result.todoKey, undefined);
 	});
 
+	test('a deleted reply is surfaced as an orphan rather than disappearing from the sidebar', () => {
+		const todo = base({ comments: undefined });
+		const snapshot: DraftSnapshot = {
+			kind: 'reply', replyId: 'comment-0', backupKey: 'removed-reply',
+			todoIdentity: { filePath: todo.uri.fsPath, originalText: todo.raw },
+			text: 'recover this reply', baseSource: 'original', state: 'dirty',
+		};
+		const [result] = reconcileDrafts([snapshot], [todo], ref => ref.raw);
+		assert.strictEqual(result.todoKey, undefined);
+		assert.strictEqual(result.state, 'conflict');
+	});
+
 	test('DraftManager persists changes keyed by file/original-text/kind/reply and clears them on save', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'quick-note-drafts-'));
 		try {
@@ -107,6 +120,25 @@ suite('Draft persistence and restart reconciliation', () => {
 			await manager.clear(todo, 'body');
 			await manager.clear(todo, 'reply', 'comment-0');
 			assert.deepStrictEqual(await manager.reconcile([todo], key), []);
+		} finally {
+			await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+		}
+	});
+
+	test('editing a restored draft preserves its original base and a queued clear removes late writes', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'quick-note-drafts-'));
+		try {
+			const store = new DraftStore(vscode.Uri.file(directory));
+			const manager = new DraftManager(store);
+			const todo = base();
+			await manager.change(todo, 'body', { text: 'first' });
+			const changed = base({ bodyMarkdown: 'external change' });
+			await manager.change(changed, 'body', { text: 'second' });
+			const key = draftBackupKey({ filePath: todo.uri.fsPath, originalText: todo.raw, kind: 'body' });
+			assert.strictEqual((await store.load(key))?.baseSource, '本文');
+			assert.strictEqual((await manager.reconcile([changed], ref => ref.raw))[0].state, 'conflict');
+			await Promise.all([manager.change(todo, 'body', { text: 'late write' }), manager.clear(todo, 'body')]);
+			assert.strictEqual(await store.load(key), undefined);
 		} finally {
 			await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 		}

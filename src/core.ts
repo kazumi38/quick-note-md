@@ -269,6 +269,9 @@ export function serializeComments(comments: readonly string[], eol = '\n', inden
 
 export function serializeTodoMetadata(labels: readonly string[] = [], dueDate?: string, eol = '\n', indent = ''): string {
 	const safeLabels = normalizeLabels(labels);
+	if (safeLabels.some(label => /[,"\r\n\u0000]/.test(label))) {
+		throw new Error('ラベル名にカンマ、引用符、改行は使用できません。');
+	}
 	if (dueDate !== undefined && dueDate !== '' && !isValidDueDate(dueDate.trim())) {
 		throw new Error('対応日は有効な YYYY-MM-DD 形式で指定してください。');
 	}

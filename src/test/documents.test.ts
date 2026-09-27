@@ -139,6 +139,25 @@ suite('DocumentStore integration', () => {
 		await assert.rejects(store.deleteTodoComment(todo, 'missing'));
 	});
 
+	test('adding a body after metadata keeps metadata and replies attached to the same Todo', async () => {
+		const uri = vscode.Uri.joinPath(root, 'tasks.md');
+		await write(uri, '- [ ] task\n- [ ] keep\n');
+		let todo = (await store.todos())[0];
+		await store.setTodoMetadata(todo, ['work'], '2030-01-01');
+		todo = (await store.todos())[0];
+		await store.addTodoComment(todo, 'existing reply');
+		todo = (await store.todos())[0];
+		await store.editTodoBody(todo, 'new body');
+		const [updated, sibling] = await store.todos();
+		assert.deepStrictEqual(updated.labels, ['work']);
+		assert.strictEqual(updated.dueDate, '2030-01-01');
+		assert.strictEqual(updated.bodyMarkdown, 'new body');
+		assert.deepStrictEqual(updated.comments?.comments.map(comment => comment.bodyMarkdown), ['existing reply']);
+		assert.strictEqual(sibling.text, 'keep');
+		assert.ok((await readNormalized(uri)).indexOf('quick-note-md:meta') <
+			(await readNormalized(uri)).indexOf('quick-note-md:body'));
+	});
+
 	test('setTodoMetadata guards only the metadata line and preserves body, replies, and status', async () => {
 		const uri = vscode.Uri.joinPath(root, 'tasks.md');
 		await write(uri, '- [x] done task\n');
@@ -157,6 +176,10 @@ suite('DocumentStore integration', () => {
 		assert.strictEqual(todo.dueDate, undefined);
 		assert.strictEqual(todo.bodyMarkdown, '本文', '本文は属性更新の影響を受けない');
 		await assert.rejects(store.setTodoMetadata(todo, [], 'not-a-date'));
+		const beforeInvalidLabels = await read(uri);
+		await assert.rejects(store.setTodoMetadata(todo, ['comma,label'], undefined));
+		await assert.rejects(store.setTodoMetadata(todo, ['quote"label'], undefined));
+		assert.strictEqual(await read(uri), beforeInvalidLabels);
 	});
 
 	test('deleting a Todo removes its body and replies as one guarded block, leaving siblings untouched', async () => {

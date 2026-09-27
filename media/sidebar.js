@@ -9,6 +9,7 @@
   // triggered by an unrelated file change never wipes out what the user is mid-typing.
   const live = { body: {}, attrs: {}, reply: {}, bodyHtml: {}, replyHtml: {} };
   const timers = {};
+  const pending = {};
   let snapshot = { files: [], todos: [], orphans: [], labelPalette: [] };
 
   function persist() { vscode.setState(state); }
@@ -16,6 +17,16 @@
   function debounce(key, delay, fn) {
     clearTimeout(timers[key]);
     timers[key] = setTimeout(fn, delay);
+  }
+
+  function submitDraft(field, key, payload) {
+    const timerKey = `${field === 'attributes' ? 'attrs' : field}:${key}`;
+    clearTimeout(timers[timerKey]);
+    delete timers[timerKey];
+    if (pending[timerKey]) return;
+    pending[timerKey] = true;
+    vscode.postMessage(payload);
+    render();
   }
 
   // Safe interim display while the host renders real Markdown; replaced by sanitized HTML from the extension.
@@ -176,22 +187,17 @@
       },
     }, ['ラベル追加']);
     const dueInput = el('input', {
-      type: 'date', value: current.dueDate || '', 'aria-label': '対応日', 'data-focus-key': `attrs-due:${key}`,
+      type: 'date', value: current.dueDate || '', disabled: pending[`attrs:${key}`], 'aria-label': '対応日', 'data-focus-key': `attrs-due:${key}`,
       oninput: event => { current.dueDate = event.target.value; pushDraft(); },
     });
     const save = el('button', {
-      type: 'button', disabled: Boolean(conflict),
-      onclick: () => {
-        vscode.postMessage({ kind: 'saveAttributes', id: todo.id, labels: current.labels, dueDate: current.dueDate || undefined });
-        delete live.attrs[key]; state.editingAttrs[key] = false; persist();
-      },
+      type: 'button', disabled: Boolean(conflict) || pending[`attrs:${key}`],
+      onclick: () => submitDraft('attributes', key,
+        { kind: 'saveAttributes', id: todo.id, labels: current.labels, dueDate: current.dueDate || undefined }),
     }, ['保存']);
     const discard = el('button', {
-      type: 'button',
-      onclick: () => {
-        vscode.postMessage({ kind: 'discardAttributes', id: todo.id });
-        delete live.attrs[key]; state.editingAttrs[key] = false; persist(); render();
-      },
+      type: 'button', disabled: pending[`attrs:${key}`],
+      onclick: () => submitDraft('attributes', key, { kind: 'discardAttributes', id: todo.id }),
     }, ['破棄']);
     return el('div', { className: 'attributes editing' }, [
       conflict ? el('p', { className: 'warning', role: 'alert' }, ['この Todo は外部で変更されました。下書きは復元できません。内容を確認して破棄してください。']) : undefined,
@@ -226,7 +232,7 @@
     if (live.bodyHtml[key] === undefined) {
       if (todo.bodyDraft) {
         // A restored draft's text differs from the last saved bodyHtml; ask the host to render it.
-        vscode.postMessage({ kind: 'draftBody', id: todo.id, text: live.body[key] });
+        vscode.postMessage({ kind: 'previewBody', id: todo.id, text: live.body[key] });
         live.bodyHtml[key] = escapeForPreview(live.body[key]);
       } else {
         live.bodyHtml[key] = todo.bodyHtml || escapeForPreview(live.body[key]);
@@ -235,27 +241,22 @@
     const previewKey = `body:${key}`;
     const preview = el('div', { className: 'preview live', 'data-preview-key': previewKey, innerHTML: live.bodyHtml[key] });
     const textarea = el('textarea', {
-      'aria-label': '本文（Markdown）', rows: '4', 'data-focus-key': `body:${key}`,
+      'aria-label': '本文（Markdown）', rows: '4', disabled: pending[`body:${key}`], 'data-focus-key': `body:${key}`,
       oninput: event => {
         live.body[key] = event.target.value;
-        preview.innerHTML = escapeForPreview(event.target.value);
+        live.bodyHtml[key] = escapeForPreview(event.target.value);
+        preview.innerHTML = live.bodyHtml[key];
         debounce(`body:${key}`, 300, () => vscode.postMessage({ kind: 'draftBody', id: todo.id, text: live.body[key] }));
       },
     }, []);
     textarea.value = live.body[key];
     const save = el('button', {
-      type: 'button', disabled: Boolean(conflict),
-      onclick: () => {
-        vscode.postMessage({ kind: 'saveBody', id: todo.id, text: live.body[key] });
-        delete live.body[key]; delete live.bodyHtml[key]; state.editingBody[key] = false; persist();
-      },
+      type: 'button', disabled: Boolean(conflict) || pending[`body:${key}`],
+      onclick: () => submitDraft('body', key, { kind: 'saveBody', id: todo.id, text: live.body[key] }),
     }, ['保存']);
     const discard = el('button', {
-      type: 'button',
-      onclick: () => {
-        vscode.postMessage({ kind: 'discardBody', id: todo.id });
-        delete live.body[key]; delete live.bodyHtml[key]; state.editingBody[key] = false; persist(); render();
-      },
+      type: 'button', disabled: pending[`body:${key}`],
+      onclick: () => submitDraft('body', key, { kind: 'discardBody', id: todo.id }),
     }, ['破棄']);
     return el('div', { className: 'body editing' }, [
       conflict ? el('p', { className: 'warning', role: 'alert' }, ['この Todo は外部で変更されました。下書きは復元できません。内容を確認して破棄してください。']) : undefined,
@@ -278,17 +279,18 @@
       if (live.reply[newKey] === undefined) { live.reply[newKey] = todo.newReplyDraft ? todo.newReplyDraft.text : ''; }
       if (live.replyHtml[newKey] === undefined) {
         if (todo.newReplyDraft) {
-          vscode.postMessage({ kind: 'draftReply', id: todo.id, text: live.reply[newKey] });
+          vscode.postMessage({ kind: 'previewReply', id: todo.id, text: live.reply[newKey] });
         }
         live.replyHtml[newKey] = escapeForPreview(live.reply[newKey]);
       }
       const conflict = todo.newReplyDraft && todo.newReplyDraft.state === 'conflict';
       const preview = el('div', { className: 'preview live', 'data-preview-key': `reply:${newKey}`, innerHTML: live.replyHtml[newKey] });
       const textarea = el('textarea', {
-        'aria-label': '新しいリプライ（Markdown）', rows: '2', 'data-focus-key': `reply:${newKey}`,
+        'aria-label': '新しいリプライ（Markdown）', rows: '2', disabled: pending[`reply:${newKey}`], 'data-focus-key': `reply:${newKey}`,
         oninput: event => {
           live.reply[newKey] = event.target.value;
-          preview.innerHTML = escapeForPreview(event.target.value);
+          live.replyHtml[newKey] = escapeForPreview(event.target.value);
+          preview.innerHTML = live.replyHtml[newKey];
           debounce(`reply:${newKey}`, 300, () => vscode.postMessage({ kind: 'draftReply', id: todo.id, text: live.reply[newKey] }));
         },
       }, []);
@@ -298,18 +300,13 @@
         textarea, preview,
         el('div', { className: 'row' }, [
           el('button', {
-            type: 'button', disabled: Boolean(conflict),
-            onclick: () => {
-              vscode.postMessage({ kind: 'saveReply', id: todo.id, text: live.reply[newKey] });
-              delete live.reply[newKey]; delete live.replyHtml[newKey]; state.editingReply[newKey] = false; persist();
-            },
+            type: 'button', disabled: Boolean(conflict) || pending[`reply:${newKey}`],
+            onclick: () => submitDraft('reply', newKey,
+              { kind: 'saveReply', id: todo.id, text: live.reply[newKey] }),
           }, ['追加']),
           el('button', {
-            type: 'button',
-            onclick: () => {
-              vscode.postMessage({ kind: 'discardReply', id: todo.id });
-              delete live.reply[newKey]; delete live.replyHtml[newKey]; state.editingReply[newKey] = false; persist(); render();
-            },
+            type: 'button', disabled: pending[`reply:${newKey}`],
+            onclick: () => submitDraft('reply', newKey, { kind: 'discardReply', id: todo.id }),
           }, ['破棄']),
         ]),
       ]);
@@ -333,7 +330,7 @@
     if (live.reply[key] === undefined) { live.reply[key] = reply.draft ? reply.draft.text : reply.text; }
     if (live.replyHtml[key] === undefined) {
       if (reply.draft) {
-        vscode.postMessage({ kind: 'draftReply', id: todo.id, replyId: reply.id, text: live.reply[key] });
+        vscode.postMessage({ kind: 'previewReply', id: todo.id, replyId: reply.id, text: live.reply[key] });
         live.replyHtml[key] = escapeForPreview(live.reply[key]);
       } else {
         live.replyHtml[key] = reply.html || escapeForPreview(live.reply[key]);
@@ -341,10 +338,11 @@
     }
     const preview = el('div', { className: 'preview live', 'data-preview-key': `reply:${key}`, innerHTML: live.replyHtml[key] });
     const textarea = el('textarea', {
-      'aria-label': `リプライ ${reply.id} を編集`, rows: '2', 'data-focus-key': `reply:${key}`,
+      'aria-label': `リプライ ${reply.id} を編集`, rows: '2', disabled: pending[`reply:${key}`], 'data-focus-key': `reply:${key}`,
       oninput: event => {
         live.reply[key] = event.target.value;
-        preview.innerHTML = escapeForPreview(event.target.value);
+        live.replyHtml[key] = escapeForPreview(event.target.value);
+        preview.innerHTML = live.replyHtml[key];
         debounce(`reply:${key}`, 300, () => vscode.postMessage({ kind: 'draftReply', id: todo.id, replyId: reply.id, text: live.reply[key] }));
       },
     }, []);
@@ -355,18 +353,14 @@
       textarea, preview,
       el('div', { className: 'row' }, [
         el('button', {
-          type: 'button', disabled: Boolean(conflict),
-          onclick: () => {
-            vscode.postMessage({ kind: 'saveReply', id: todo.id, replyId: reply.id, text: live.reply[key] });
-            delete live.reply[key]; delete live.replyHtml[key]; state.editingReply[key] = false; persist();
-          },
+          type: 'button', disabled: Boolean(conflict) || pending[`reply:${key}`],
+          onclick: () => submitDraft('reply', key,
+            { kind: 'saveReply', id: todo.id, replyId: reply.id, text: live.reply[key] }),
         }, ['保存']),
         el('button', {
-          type: 'button',
-          onclick: () => {
-            vscode.postMessage({ kind: 'discardReply', id: todo.id, replyId: reply.id });
-            delete live.reply[key]; delete live.replyHtml[key]; state.editingReply[key] = false; persist(); render();
-          },
+          type: 'button', disabled: pending[`reply:${key}`],
+          onclick: () => submitDraft('reply', key,
+            { kind: 'discardReply', id: todo.id, replyId: reply.id }),
         }, ['破棄']),
       ]),
     ]);
@@ -376,9 +370,25 @@
     const data = event.data;
     if (!data) return;
     if (data.kind === 'snapshot') { snapshot = data; render(); return; }
+    if (data.kind === 'draftResult') {
+      const key = data.field === 'reply' ? `${data.id}:${data.replyId || 'new'}` : data.id;
+      const field = data.field === 'attributes' ? 'attrs' : data.field;
+      delete pending[`${field}:${key}`];
+      if (data.success) {
+        delete live[field][key];
+        if (field === 'body' || field === 'reply') delete live[`${field}Html`][key];
+        const editing = field === 'attrs' ? state.editingAttrs : field === 'body' ? state.editingBody : state.editingReply;
+        editing[key] = false;
+        persist();
+      }
+      render();
+      return;
+    }
     if (data.kind === 'preview') {
       const key = `${data.id}:${data.replyId || 'new'}`;
       const previewKey = data.field === 'body' ? `body:${data.id}` : `reply:${key}`;
+      const text = data.field === 'body' ? live.body[data.id] : live.reply[key];
+      if (text === undefined || text !== data.text) return;
       if (data.field === 'body') { live.bodyHtml[data.id] = data.html; }
       else { live.replyHtml[key] = data.html; }
       const node = app.querySelector(`[data-preview-key="${CSS.escape(previewKey)}"]`);
