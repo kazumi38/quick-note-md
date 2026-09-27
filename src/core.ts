@@ -22,6 +22,7 @@ export interface TodoIdentity {
 
 function parseTodoBody(source: string, todoLine: number): { value?: string; readOnly: boolean; warning?: string } {
 	const lines = source.split(/\r\n|\n|\r/);
+	const ownerIndent = todoListIndent(lines[todoLine]);
 	let cursor = todoLine + 1;
 	if (metadataPattern.test(lines[cursor]?.trim() ?? '')) { cursor++; }
 	if (lines[cursor]?.trim() !== bodyStart) {
@@ -31,10 +32,21 @@ function parseTodoBody(source: string, todoLine: number): { value?: string; read
 	}
 	cursor++;
 	const start = cursor;
-	while (cursor < lines.length && lines[cursor].trim() !== bodyEnd) { cursor++; }
+	while (cursor < lines.length && lines[cursor].trim() !== bodyEnd) {
+		if (ownerIndent !== undefined && todoListIndent(lines[cursor]) === ownerIndent) {
+			return { readOnly: true, warning: '本文境界が後続 Todo と交差するため、読み取り専用です。' };
+		}
+		cursor++;
+	}
 	return cursor < lines.length
 		? { value: lines.slice(start, cursor).join('\n'), readOnly: false }
 		: { readOnly: true, warning: '本文の終了境界がないため、読み取り専用です。' };
+}
+
+function todoListIndent(line: string | undefined): string | undefined {
+	if (line === undefined) { return undefined; }
+	const match = /^([ \t]*)(?:[-+*]|\d+[.)])[ \t]+\[[^\]]*\](?:[ \t]+.*|$)$/.exec(line);
+	return match?.[1];
 }
 
 export interface TodoComment {

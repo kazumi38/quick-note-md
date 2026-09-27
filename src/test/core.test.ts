@@ -26,6 +26,13 @@ suite('Markdown core', () => {
 		assert.strictEqual(todos[0].raw, '- [?] mystery');
 	});
 
+	test('a body boundary crossing a sibling-level Todo remains read-only and does not parse body content as Todo', () => {
+		const todos = parseTodos('- [ ] first\n<!-- quick-note-md:body -->\ntext\n- [ ] second\n<!-- quick-note-md:end-body -->');
+		assert.deepStrictEqual(todos.map(todo => todo.text), ['first']);
+		assert.strictEqual(todos[0].readOnly, true);
+		assert.match(todos[0].warning ?? '', /後続 Todo/);
+	});
+
 	test('CRLF parsing, plain prose and escaped brackets are safe', () => {
 		assert.deepStrictEqual(parseTodos('prose [ ] ignored\r\n- \\[ ] escaped\r\n- [!] yes\r\n').map(todo => [todo.line, todo.raw]), [[2, '- [!] yes']]);
 		assert.deepStrictEqual(parseTodos(''), []);

@@ -104,6 +104,17 @@ suite('DocumentStore integration', () => {
 		assert.strictEqual(await readNormalized(uri), '# Keep\n- [ ] same\n- [?] unknown\nTail');
 	});
 
+	test('a malformed body boundary makes deletion read-only and preserves the complete source', async () => {
+		const uri = vscode.Uri.joinPath(root, 'tasks.md');
+		const source = '- [ ] first\n<!-- quick-note-md:body -->\ntext\n- [ ] second\n<!-- quick-note-md:end-body -->\n';
+		await write(uri, source);
+		const todos = await store.todos();
+		assert.deepStrictEqual(todos.map(todo => todo.text), ['first']);
+		assert.strictEqual(todos[0].readOnly, true);
+		await assert.rejects(store.deleteTodo(todos[0]));
+		assert.strictEqual(await readNormalized(uri), source);
+	});
+
 	test('range edits validate version, offsets and original text with UTF-16', async () => {
 		const uri = vscode.Uri.joinPath(root, 'text.md');
 		await write(uri, '😀 日本語\nkeep\n');
