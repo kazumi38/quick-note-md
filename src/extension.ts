@@ -25,6 +25,10 @@ export function activate(context: vscode.ExtensionContext): void {
 				await vscode.window.showErrorMessage(error instanceof Error ? error.message : '操作を完了できませんでした。');
 			} finally {
 				sidebar.schedule();
+				if (name !== 'refresh') {
+					void unifiedView.refresh().catch(error =>
+						vscode.window.showErrorMessage(error instanceof Error ? error.message : '一覧を更新できませんでした。'));
+				}
 			}
 		}));
 	};
@@ -152,7 +156,10 @@ export function activate(context: vscode.ExtensionContext): void {
 	});
 	register('showRendered', async item => open(memoUri(item), 'rendered'));
 	register('toggleView', async item => open(memoUri(item, !editor.activeUri), editor.activeUri ? 'source' : 'rendered'));
-	register('refresh', async () => sidebar.refresh());
+	register('refresh', async () => {
+		await sidebar.refresh();
+		await unifiedView.refresh();
+	});
 
 	let watcher: vscode.FileSystemWatcher | undefined;
 	const watch = () => {

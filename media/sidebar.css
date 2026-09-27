@@ -11,6 +11,9 @@ p.empty { opacity: 0.7; font-style: italic; }
 p.warning { color: var(--vscode-errorForeground); }
 p.notice { color: var(--vscode-descriptionForeground); font-style: italic; }
 p.preview-label { font-size: 0.85em; opacity: 0.75; }
+.empty-state, .load-error { padding: 8px; border: 1px solid var(--vscode-panel-border); border-radius: 2px; }
+.load-error { border-color: var(--vscode-inputValidation-errorBorder); }
+.empty-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 .orphans { border: 1px solid var(--vscode-inputValidation-warningBorder); background: var(--vscode-inputValidation-warningBackground); padding: 6px; margin-bottom: 8px; }
 .orphan { display: flex; gap: 6px; align-items: flex-start; margin: 4px 0; }
