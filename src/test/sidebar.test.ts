@@ -85,7 +85,8 @@ suite('Sidebar and settings', () => {
 			await vscode.commands.executeCommand('quick-note-md.showSource', uri);
 			assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), uri.toString());
 		} finally {
-			await rm(directory, { recursive: true, force: true });
+			await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+			await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 		}
 	});
 });

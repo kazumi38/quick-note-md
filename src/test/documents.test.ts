@@ -26,20 +26,21 @@ suite('DocumentStore integration', () => {
 	});
 
 	const read = async (uri: vscode.Uri): Promise<string> => Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+	const readNormalized = async (uri: vscode.Uri): Promise<string> => (await read(uri)).replace(/\r\n/g, '\n');
 	const write = async (uri: vscode.Uri, text: string): Promise<void> => vscode.workspace.fs.writeFile(uri, Buffer.from(text));
 
 	test('memo collisions never overwrite; nested Markdown discovery and lazy Todo creation', async () => {
 		const first = await store.createMemo('日本語');
 		const second = await store.createMemo('日本語');
 		assert.notStrictEqual(first.toString(), second.toString());
-		assert.strictEqual(await read(first), '# 日本語\n');
+		assert.strictEqual(await readNormalized(first), '# 日本語\n');
 		const sub = vscode.Uri.joinPath(root, 'sub');
 		await vscode.workspace.fs.createDirectory(sub);
 		await write(vscode.Uri.joinPath(sub, 'nested.md'), '- [ ] nested\n');
 		await write(vscode.Uri.joinPath(sub, 'ignored.txt'), '- [ ] ignored\n');
 		assert.strictEqual((await store.list()).length, 3);
 		await store.createTodo('new');
-		assert.strictEqual(await read(vscode.Uri.joinPath(root, 'todo.md')), '- [ ] new\n');
+		assert.strictEqual(await readNormalized(vscode.Uri.joinPath(root, 'todo.md')), '- [ ] new\n');
 		assert.deepStrictEqual((await store.todos()).map(todo => todo.text).sort(), ['nested', 'new']);
 	});
 
@@ -66,7 +67,7 @@ suite('DocumentStore integration', () => {
 		assert.ok(await vscode.workspace.applyEdit(change));
 		assert.strictEqual(await document.save(), true);
 		await store.append(uri, 'next');
-		assert.strictEqual(await read(uri), 'before\nsaved change\nnext\n');
+		assert.strictEqual(await readNormalized(uri), 'before\nsaved change\nnext\n');
 	});
 
 	test('status edits touch only marker and distinguish duplicate lines; stale refs fail', async () => {
@@ -96,11 +97,11 @@ suite('DocumentStore integration', () => {
 		const uri = vscode.Uri.joinPath(root, 'tasks.md');
 		await write(uri, '# Keep\n- [ ] same\n- [ ] same\n- [?] unknown\nTail');
 		await store.deleteTodo((await store.todos())[1]);
-		assert.strictEqual(await read(uri), '# Keep\n- [ ] same\n- [?] unknown\nTail');
+		assert.strictEqual(await readNormalized(uri), '# Keep\n- [ ] same\n- [?] unknown\nTail');
 		const unknown = (await store.todos())[1];
 		await assert.rejects(store.deleteTodo(unknown));
 		await assert.rejects(store.setStatus(unknown, 'done'));
-		assert.strictEqual(await read(uri), '# Keep\n- [ ] same\n- [?] unknown\nTail');
+		assert.strictEqual(await readNormalized(uri), '# Keep\n- [ ] same\n- [?] unknown\nTail');
 	});
 
 	test('range edits validate version, offsets and original text with UTF-16', async () => {
@@ -109,7 +110,7 @@ suite('DocumentStore integration', () => {
 		const document = await vscode.workspace.openTextDocument(uri);
 		const version = document.version;
 		const next = await store.edit(uri, version, 3, 6, '日本語', '更新');
-		assert.strictEqual(await read(uri), '😀 更新\nkeep\n');
+		assert.strictEqual(await readNormalized(uri), '😀 更新\nkeep\n');
 		assert.strictEqual(next, document.version);
 		await assert.rejects(store.edit(uri, version, 3, 5, '更新', 'old'));
 		await assert.rejects(store.edit(uri, next, 3, 5, 'wrong', 'bad'));
@@ -130,8 +131,8 @@ suite('DocumentStore integration', () => {
 		await assert.rejects(store.setStatus((await store.todos())[0], 'done'));
 		await store.edit(uri, document.version, 6, 11, 'saved', 'edited');
 		assert.strictEqual(document.isDirty, true);
-		assert.strictEqual(await read(uri), '- [ ] saved\n');
-		assert.strictEqual(document.getText(), '- [ ] edited\n- [n] unsaved\n');
+		assert.strictEqual(await readNormalized(uri), '- [ ] saved\n');
+		assert.strictEqual(document.getText().replace(/\r\n/g, '\n'), '- [ ] edited\n- [n] unsaved\n');
 	});
 
 	test('queue recovers after a conflict; simultaneous same-version edits do not overwrite', async () => {
@@ -140,7 +141,7 @@ suite('DocumentStore integration', () => {
 		const result = await Promise.allSettled([store.setStatus(ref, 'done'), store.setStatus(ref, 'warn')]);
 		assert.strictEqual(result.filter(item => item.status === 'fulfilled').length, 1);
 		await store.append(ref.uri, 'after conflict');
-		assert.strictEqual(await read(ref.uri), '- [x] task\nafter conflict\n');
+		assert.strictEqual(await readNormalized(ref.uri), '- [x] task\nafter conflict\n');
 	});
 
 	test('deleted, outside-root and read-only targets are rejected', async () => {
@@ -170,7 +171,7 @@ suite('DocumentStore integration', () => {
 		await store.createTodo('original');
 		const ref = (await store.todos())[0];
 		await assert.rejects(store.setStatus({ ...ref, raw: '- [ ] another' }, 'done'));
-		assert.strictEqual(await read(ref.uri), '- [ ] original\n');
+		assert.strictEqual(await readNormalized(ref.uri), '- [ ] original\n');
 	});
 
 	test('external disk changes are not overwritten by a stale Todo operation', async () => {
@@ -178,7 +179,7 @@ suite('DocumentStore integration', () => {
 		const ref = (await store.todos())[0];
 		await write(ref.uri, '- [ ] external change\n');
 		await assert.rejects(store.setStatus(ref, 'done'));
-		assert.strictEqual(await read(ref.uri), '- [ ] external change\n');
+		assert.strictEqual(await readNormalized(ref.uri), '- [ ] external change\n');
 	});
 
 	test('edits during save are reported as conflicts rather than acknowledged as our version', async () => {
@@ -195,8 +196,8 @@ suite('DocumentStore integration', () => {
 		try {
 			await assert.rejects(store.edit(ref.uri, ref.version, 6, 14, 'original', 'edited'), /変更/);
 			assert.strictEqual(changed, true);
-			assert.strictEqual(document.getText(), '- [ ] edited\nconcurrent change\n');
-			assert.strictEqual(await read(ref.uri), document.getText());
+			assert.strictEqual(document.getText().replace(/\r\n/g, '\n'), '- [ ] edited\nconcurrent change\n');
+			assert.strictEqual(await readNormalized(ref.uri), document.getText().replace(/\r\n/g, '\n'));
 		} finally { listener.dispose(); }
 	});
 
@@ -251,8 +252,9 @@ suite('DocumentStore integration', () => {
 		assert.ok(todo);
 		await store.setStatus(todo!, 'done');
 		const text = await read(uri);
-		assert.ok(text.startsWith('line 0\nline 1\n'));
-		assert.ok(text.includes('- [x] tail task\nafter\n'));
+		const normalized = text.replace(/\r\n/g, '\n');
+		assert.ok(normalized.startsWith('line 0\nline 1\n'));
+		assert.ok(normalized.includes('- [x] tail task\nafter\n'));
 		assert.ok(text.split('\n').length >= 1001);
 	});
 });

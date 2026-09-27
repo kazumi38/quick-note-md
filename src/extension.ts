@@ -3,7 +3,7 @@ import { defaultView, isManaged, notesRoot } from './configuration';
 import { safeFileName, statusInfo, statusOrder, TodoStatus } from './core';
 import { DocumentStore } from './documents';
 import { NoteEditor } from './editor';
-import { CommentNode, MemoNode, Sidebar, TodoBodyNode, TodoNode } from './sidebar';
+import { isCommentNode, MemoNode, Sidebar, todoRefFromNode, TodoNode } from './sidebar';
 import { SidebarView } from './sidebarView';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -29,7 +29,8 @@ export function activate(context: vscode.ExtensionContext): void {
 		}));
 	};
 	const memoUri = (item?: unknown, requireManaged = true): vscode.Uri => {
-		const uri = item instanceof MemoNode ? item.uri : item instanceof TodoNode || item instanceof TodoBodyNode ? item.todo.uri
+		const todo = todoRefFromNode(item);
+		const uri = item instanceof MemoNode ? item.uri : todo ? todo.uri
 			: item instanceof vscode.Uri ? item : editor.activeUri ?? vscode.window.activeTextEditor?.document.uri
 				?? sidebar.memoView.selection[0]?.uri;
 		if (!uri || (requireManaged && !isManaged(uri))) {
@@ -39,8 +40,9 @@ export function activate(context: vscode.ExtensionContext): void {
 	};
 	const todoItem = (item?: unknown): TodoNode => {
 		const selection = item ?? sidebar.todoView.selection[0];
-		if (!(selection instanceof TodoNode)) { throw new Error('Todo 項目を選択してください。'); }
-		return selection;
+		const todo = todoRefFromNode(selection);
+		if (!todo) { throw new Error('Todo 項目を選択してください。'); }
+		return new TodoNode(todo);
 	};
 	const open = async (uri: vscode.Uri, mode = defaultView()) => {
 		await vscode.commands.executeCommand('vscode.openWith', uri, mode === 'source' ? 'default' : NoteEditor.viewType);
@@ -91,12 +93,12 @@ export function activate(context: vscode.ExtensionContext): void {
 		if (text !== undefined) { await store.editTodoBody(todo, text); }
 	});
 	register('editTodoComment', async item => {
-		if (!(item instanceof CommentNode)) { throw new Error('編集するコメントを選択してください。'); }
+		if (!isCommentNode(item)) { throw new Error('編集するコメントを選択してください。'); }
 		const text = await inputComment('Todo コメントを編集（複数行 Markdown）', item.comment.bodyMarkdown);
 		if (text !== undefined) { await store.editTodoComment(item.todo, item.comment.id, text); }
 	});
 	register('deleteTodoComment', async item => {
-		if (!(item instanceof CommentNode)) { throw new Error('削除するリプライを選択してください。'); }
+		if (!isCommentNode(item)) { throw new Error('削除するリプライを選択してください。'); }
 		if (await vscode.window.showWarningMessage('このリプライを削除しますか？', { modal: true }, '削除') === '削除') {
 			await store.deleteTodoComment(item.todo, item.comment.id);
 		}
