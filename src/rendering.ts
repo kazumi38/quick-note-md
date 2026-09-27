@@ -34,6 +34,19 @@ export function escapeHtml(text: string): string {
 	return markdown.utils.escapeHtml(text);
 }
 
+// A dedicated instance for read-only body/reply previews: same safety rules as the editable
+// renderer (no HTML, no live links/images) but without the contenteditable span wiring.
+const previewMarkdown = new MarkdownIt({ html: false, linkify: false, typographer: false });
+previewMarkdown.renderer.rules.link_open = () => '<span class="link">';
+previewMarkdown.renderer.rules.link_close = () => '</span>';
+previewMarkdown.renderer.rules.image = (tokens, index) =>
+	`<span class="image">画像: ${escapeHtml(tokens[index].content)}</span>`;
+
+/** Renders Todo body/reply Markdown for live preview: HTML disabled, links/images inert. */
+export function renderSafeMarkdown(text: string): string {
+	return previewMarkdown.render(text);
+}
+
 // Links remain readable, but cannot invoke commands or navigate the webview.
 markdown.renderer.rules.link_open = () => '<span class="link">';
 markdown.renderer.rules.link_close = () => '</span>';

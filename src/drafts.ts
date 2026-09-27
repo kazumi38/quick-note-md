@@ -50,4 +50,27 @@ export class DraftStore {
 			if (!(error instanceof vscode.FileSystemError && error.code === 'FileNotFound')) { throw error; }
 		}
 	}
+
+	/** Enumerates every backup file, skipping unreadable or malformed entries rather than failing outright. */
+	async list(): Promise<DraftSnapshot[]> {
+		let entries: [string, vscode.FileType][];
+		try {
+			entries = await vscode.workspace.fs.readDirectory(this.storage);
+		} catch (error) {
+			if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') { return []; }
+			throw error;
+		}
+		const snapshots: DraftSnapshot[] = [];
+		for (const [name, type] of entries) {
+			if (!(type & vscode.FileType.File) || !name.endsWith('.json')) { continue; }
+			try {
+				const data = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.storage, name));
+				const parsed: unknown = JSON.parse(Buffer.from(data).toString('utf8'));
+				if (parsed && typeof parsed === 'object' && typeof (parsed as { backupKey?: unknown }).backupKey === 'string') {
+					snapshots.push(parsed as DraftSnapshot);
+				}
+			} catch { /* Corrupt or unreadable backups are skipped, never surfaced as data loss. */ }
+		}
+		return snapshots;
+	}
 }

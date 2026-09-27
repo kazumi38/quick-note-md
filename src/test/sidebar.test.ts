@@ -3,10 +3,11 @@ import * as vscode from 'vscode';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { directorySegments } from '../configuration';
+import { directorySegments, labelColor, labelPalette, setLabelColor } from '../configuration';
 import { statusInfo } from '../core';
 import { TodoRef } from '../documents';
 import { MemoNode, MemoProvider, StatusNode, TodoNode, TodoProvider } from '../sidebar';
+import { computeDueState } from '../sidebarView';
 
 suite('Sidebar and settings', () => {
 	const todo: TodoRef = {
@@ -58,6 +59,37 @@ suite('Sidebar and settings', () => {
 			assert.strictEqual(provider.getChildren()[0].resourceUri, todo.uri);
 			assert.strictEqual(memo.command?.command, 'quick-note-md.openMemo');
 		} finally { subscription.dispose(); provider.dispose(); }
+	});
+
+	test('label colors are deterministic and shared across the workspace until reassigned', async () => {
+		const config = vscode.workspace.getConfiguration('quick-note-md');
+		const original = config.get<Record<string, string>>('labelColors', {});
+		const label = `一時ラベル-${Date.now()}`;
+		try {
+			const assigned = labelColor(label);
+			assert.ok((labelPalette as readonly string[]).includes(assigned));
+			assert.strictEqual(labelColor(label), assigned, 'the same label always resolves to the same color');
+			const next = labelPalette.find(color => color !== assigned)!;
+			await setLabelColor(label, next);
+			assert.strictEqual(labelColor(label), next, 'an explicit assignment overrides the hashed default');
+			await assert.rejects(setLabelColor(label, 'not-a-color' as never));
+		} finally {
+			const map = { ...config.get<Record<string, string>>('labelColors', {}) };
+			delete map[label];
+			await config.update('labelColors', Object.keys(map).length ? map : (Object.keys(original).length ? original : undefined),
+				vscode.ConfigurationTarget.Workspace);
+		}
+	});
+
+	test('due-date urgency is local-calendar based and never overdue once done', () => {
+		const anchor = new Date(Date.UTC(2030, 5, 15));
+		assert.strictEqual(computeDueState(undefined, 'open', anchor), 'none');
+		assert.strictEqual(computeDueState('2030-06-14', 'open', anchor), 'overdue');
+		assert.strictEqual(computeDueState('2030-06-15', 'open', anchor), 'upcoming');
+		assert.strictEqual(computeDueState('2030-06-18', 'open', anchor), 'upcoming');
+		assert.strictEqual(computeDueState('2030-06-19', 'open', anchor), 'none');
+		assert.strictEqual(computeDueState('2030-06-14', 'done', anchor), 'none', '完了済み Todo は期限切れ扱いされない');
+		assert.strictEqual(computeDueState('2030-06-01', 'done', anchor), 'none');
 	});
 
 	test('extension registers all user commands and optional rendered editor', async () => {

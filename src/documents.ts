@@ -221,6 +221,18 @@ export class DocumentStore {
 		return { start, end: document.offsetAt(new vscode.Position(line, 0)) };
 	}
 
+	/** Offset right after any existing meta/body blocks, i.e. where a comments block belongs if one is absent. */
+	private metaBodyEndOffset(document: vscode.TextDocument, ref: TodoRef): number {
+		const lines = document.getText().split(/\r\n|\n|\r/);
+		let line = ref.line + 1;
+		if (lines[line]?.trim().startsWith('<!-- quick-note-md:meta')) { line++; }
+		if (lines[line]?.trim() === '<!-- quick-note-md:body -->') {
+			while (line < lines.length && lines[line]?.trim() !== '<!-- quick-note-md:end-body -->') { line++; }
+			line++;
+		}
+		return document.offsetAt(new vscode.Position(line, 0));
+	}
+
 	private todoComments(document: vscode.TextDocument, ref: TodoRef) {
 		const actual = parseTodos(document.getText()).find(todo => todo.line === ref.line);
 		if (!actual) { throw new Error('Todo が変更されました。一覧を更新して再実行してください。'); }
@@ -282,10 +294,15 @@ export class DocumentStore {
 			const body = comments.comments.map(comment => comment.bodyMarkdown);
 			body.push(text);
 			const block = serializeComments(body, eol, indent);
-			const lineRange = document.lineAt(ref.line).rangeIncludingLineBreak;
-			const insertionAt = document.offsetAt(lineRange.end);
-			const needsLeadingEol = insertionAt === document.getText().length && !document.getText().endsWith('\n');
-			const insertion = (needsLeadingEol ? eol : '') + block + (insertionAt < document.getText().length ? eol : '');
+			const existing = this.commentRange(document, comments);
+			if (existing) {
+				return this.editNow(document, ref.version, existing.start, existing.end, document.getText().slice(existing.start, existing.end), block + eol, false);
+			}
+			// No comments block yet: insert right after any existing meta/body blocks, not blindly after the Todo's own line.
+			const insertionAt = this.metaBodyEndOffset(document, ref);
+			const source = document.getText();
+			const needsLeadingEol = insertionAt === source.length && !source.endsWith('\n');
+			const insertion = (needsLeadingEol ? eol : '') + block + (insertionAt < source.length ? eol : '');
 			return this.editNow(document, ref.version, insertionAt, insertionAt, '', insertion, false);
 		});
 	}

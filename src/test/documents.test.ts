@@ -115,6 +115,64 @@ suite('DocumentStore integration', () => {
 		assert.strictEqual(await readNormalized(uri), source);
 	});
 
+	test('body and reply edits each write only their own guarded range', async () => {
+		const uri = vscode.Uri.joinPath(root, 'tasks.md');
+		await write(uri, '- [ ] task\n');
+		let todo = (await store.todos())[0];
+		await store.editTodoBody(todo, '本文1行目\n本文2行目');
+		todo = (await store.todos())[0];
+		assert.strictEqual(todo.bodyMarkdown, '本文1行目\n本文2行目');
+		await store.addTodoComment(todo, 'リプライ1');
+		todo = (await store.todos())[0];
+		await store.addTodoComment(todo, 'リプライ2');
+		todo = (await store.todos())[0];
+		assert.deepStrictEqual(todo.comments?.comments.map(comment => comment.bodyMarkdown), ['リプライ1', 'リプライ2']);
+		const firstId = todo.comments!.comments[0].id;
+		await store.editTodoComment(todo, firstId, '編集後リプライ1');
+		todo = (await store.todos())[0];
+		assert.deepStrictEqual(todo.comments?.comments.map(comment => comment.bodyMarkdown), ['編集後リプライ1', 'リプライ2']);
+		await store.deleteTodoComment(todo, todo.comments!.comments[0].id);
+		todo = (await store.todos())[0];
+		assert.deepStrictEqual(todo.comments?.comments.map(comment => comment.bodyMarkdown), ['リプライ2']);
+		assert.strictEqual(todo.bodyMarkdown, '本文1行目\n本文2行目', '本文は削除操作の影響を受けない');
+		await assert.rejects(store.editTodoComment(todo, 'missing', 'x'));
+		await assert.rejects(store.deleteTodoComment(todo, 'missing'));
+	});
+
+	test('setTodoMetadata guards only the metadata line and preserves body, replies, and status', async () => {
+		const uri = vscode.Uri.joinPath(root, 'tasks.md');
+		await write(uri, '- [x] done task\n');
+		let todo = (await store.todos())[0];
+		await store.editTodoBody(todo, '本文');
+		todo = (await store.todos())[0];
+		await store.setTodoMetadata(todo, ['a', 'b', 'a', ' c '], '2030-01-01');
+		todo = (await store.todos())[0];
+		assert.deepStrictEqual(todo.labels, ['a', 'b', 'c']);
+		assert.strictEqual(todo.dueDate, '2030-01-01');
+		assert.strictEqual(todo.status, 'done');
+		assert.strictEqual(todo.bodyMarkdown, '本文');
+		await store.setTodoMetadata(todo, [], undefined);
+		todo = (await store.todos())[0];
+		assert.deepStrictEqual(todo.labels, []);
+		assert.strictEqual(todo.dueDate, undefined);
+		assert.strictEqual(todo.bodyMarkdown, '本文', '本文は属性更新の影響を受けない');
+		await assert.rejects(store.setTodoMetadata(todo, [], 'not-a-date'));
+	});
+
+	test('deleting a Todo removes its body and replies as one guarded block, leaving siblings untouched', async () => {
+		const uri = vscode.Uri.joinPath(root, 'tasks.md');
+		await write(uri, '- [ ] keep\n- [ ] remove\n');
+		const target = (await store.todos()).find(todo => todo.text === 'remove')!;
+		await store.editTodoBody(target, '本文');
+		const withBody = (await store.todos()).find(todo => todo.text === 'remove')!;
+		await store.addTodoComment(withBody, 'リプライ');
+		const withReply = (await store.todos()).find(todo => todo.text === 'remove')!;
+		await store.deleteTodo(withReply);
+		const remaining = await store.todos();
+		assert.deepStrictEqual(remaining.map(todo => todo.text), ['keep']);
+		assert.strictEqual(await readNormalized(uri), '- [ ] keep\n');
+	});
+
 	test('range edits validate version, offsets and original text with UTF-16', async () => {
 		const uri = vscode.Uri.joinPath(root, 'text.md');
 		await write(uri, '😀 日本語\nkeep\n');

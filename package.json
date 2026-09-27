@@ -34,6 +34,12 @@
           "default": "rendered",
           "scope": "resource",
           "description": "メモを作成・開く際の表示モード。ファイル別の表示履歴は保存しません。"
+        },
+        "quick-note-md.labelColors": {
+          "type": "object",
+          "default": {},
+          "scope": "window",
+          "description": "Todo ラベル名とパレット色の対応（ワークスペース共有）。サイドバーから変更できます。"
         }
       }
     },

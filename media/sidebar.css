@@ -1,7 +1,67 @@
 :root { color-scheme: light dark; }
-body { padding: 8px; font-family: var(--vscode-font-family); color: var(--vscode-foreground); }
-h2 { font-size: 1em; }
-.todo { border-bottom: 1px solid var(--vscode-panel-border); padding: 4px 0; }
+body { padding: 8px; font-family: var(--vscode-font-family); color: var(--vscode-foreground); font-size: 13px; }
+button { color: inherit; background: var(--vscode-button-secondaryBackground); border: 1px solid transparent; padding: 3px 8px; cursor: pointer; border-radius: 2px; }
+button:hover { background: var(--vscode-button-secondaryHoverBackground); }
+button.danger { background: var(--vscode-inputValidation-errorBackground); border-color: var(--vscode-inputValidation-errorBorder); }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+button[disabled] { opacity: 0.5; cursor: not-allowed; }
+h2 { font-size: 1em; margin: 4px 0; }
+p { margin: 4px 0; }
+p.empty { opacity: 0.7; font-style: italic; }
+p.warning { color: var(--vscode-errorForeground); }
+p.notice { color: var(--vscode-descriptionForeground); font-style: italic; }
+p.preview-label { font-size: 0.85em; opacity: 0.75; }
+
+.orphans { border: 1px solid var(--vscode-inputValidation-warningBorder); background: var(--vscode-inputValidation-warningBackground); padding: 6px; margin-bottom: 8px; }
+.orphan { display: flex; gap: 6px; align-items: flex-start; margin: 4px 0; }
+.orphan pre { flex: 1; white-space: pre-wrap; margin: 0; }
+
+.file-group { border-bottom: 1px solid var(--vscode-panel-border); padding: 4px 0; }
+.file-header { display: flex; align-items: center; gap: 4px; }
+.file-title { flex: 1; text-align: left; background: transparent; border: 0; font-weight: 600; padding: 6px 2px; }
+.file-open { background: transparent; border: 0; }
+
+.status-group { margin: 2px 0 2px 8px; }
+.status-title { width: 100%; text-align: left; background: transparent; border: 0; padding: 4px 2px; }
+
+.todo { border-left: 2px solid var(--vscode-panel-border); margin: 2px 0 2px 8px; }
 .todo-title { width: 100%; text-align: left; color: inherit; background: transparent; border: 0; padding: 6px; cursor: pointer; }
-.todo-title:focus-visible, button:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
-.todo-detail { padding: 4px 8px 8px; white-space: pre-wrap; }
+
+.todo-detail { padding: 4px 8px 8px; }
+.todo-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+.attributes, .body, .replies { margin: 6px 0; }
+.attributes.editing, .body.editing, .reply.editing { border: 1px solid var(--vscode-panel-border); padding: 6px; border-radius: 2px; }
+.row { display: flex; gap: 6px; margin-top: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.label-chip { display: inline-block; padding: 1px 6px; border-radius: 10px; border: 1px solid currentColor; font-size: 0.85em; }
+.label-chip-edit { display: inline-flex; align-items: center; gap: 2px; }
+.palette { display: inline-flex; gap: 2px; }
+.swatch { width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 1px solid var(--vscode-panel-border); }
+.add-label { display: flex; gap: 4px; margin-top: 4px; }
+.due { font-size: 0.85em; padding: 1px 4px; }
+.due-overdue { color: var(--vscode-errorForeground); font-weight: 600; }
+.due-upcoming { color: var(--vscode-editorWarning-foreground); }
+
+/* Fixed VS Code chart theme colors: every label also shows its name as text so meaning never
+   depends on color perception alone. */
+.color-charts-red { color: var(--vscode-charts-red); }
+.color-charts-orange { color: var(--vscode-charts-orange); }
+.color-charts-yellow { color: var(--vscode-charts-yellow); }
+.color-charts-green { color: var(--vscode-charts-green); }
+.color-charts-blue { color: var(--vscode-charts-blue); }
+.color-charts-purple { color: var(--vscode-charts-purple); }
+.swatch.color-charts-red { background: var(--vscode-charts-red); }
+.swatch.color-charts-orange { background: var(--vscode-charts-orange); }
+.swatch.color-charts-yellow { background: var(--vscode-charts-yellow); }
+.swatch.color-charts-green { background: var(--vscode-charts-green); }
+.swatch.color-charts-blue { background: var(--vscode-charts-blue); }
+.swatch.color-charts-purple { background: var(--vscode-charts-purple); }
+
+.preview { white-space: pre-wrap; padding: 4px 0; }
+.preview.live { opacity: 0.85; border-top: 1px dashed var(--vscode-panel-border); margin-top: 4px; }
+textarea, input[type="text"], input[type="date"] {
+  width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border); padding: 4px; font-family: inherit;
+}
+.reply { border-top: 1px solid var(--vscode-panel-border); padding: 6px 0; }
