@@ -3,13 +3,21 @@
   "displayName": "QuickNoteMD",
   "description": "サイドバーで Markdown メモと Todo を管理し、レンダリング表示のまま安全に編集します。",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kazumi38/quick-note-md.git"
+  },
   "engines": {
     "vscode": "^1.138.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:quick-note-md.sidebar",
+    "onView:quick-note-md.memos",
+    "onView:quick-note-md.todos"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
@@ -68,6 +76,18 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "quick-note-md.memos",
+        "contents": "管理対象の Markdown メモはありません。\n\n[新規メモを作成](command:quick-note-md.newMemo)",
+        "when": "quick-note-md.memosEmpty"
+      },
+      {
+        "view": "quick-note-md.todos",
+        "contents": "Todo はまだありません。\n\n[新規 Todo を作成](command:quick-note-md.newTodo)",
+        "when": "quick-note-md.todosEmpty"
+      }
+    ],
     "customEditors": [
       {
         "viewType": "quick-note-md.rendered",

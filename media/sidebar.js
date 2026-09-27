@@ -10,7 +10,7 @@
   const live = { body: {}, attrs: {}, reply: {}, bodyHtml: {}, replyHtml: {} };
   const timers = {};
   const pending = {};
-  let snapshot = { files: [], todos: [], orphans: [], labelPalette: [] };
+  let snapshot = { state: 'loading', files: [], todos: [], orphans: [], labelPalette: [] };
 
   function persist() { vscode.setState(state); }
 
@@ -61,9 +61,39 @@
     const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.focusKey : undefined;
     app.replaceChildren();
     if (snapshot.orphans.length) app.append(renderOrphans());
-    if (!snapshot.files.length) {
-      app.append(el('p', {}, ['管理対象の Markdown メモがまだありません。「新規メモ」コマンドから作成できます。']));
+    if (snapshot.state === 'loading') {
+      app.append(el('p', { className: 'notice', role: 'status' }, ['メモと Todo を読み込んでいます…']));
       return;
+    }
+    if (snapshot.state === 'unavailable') {
+      app.append(el('p', { className: 'warning', role: 'status' }, [snapshot.error || 'ワークスペース フォルダーを開いてください。']));
+      return;
+    }
+    if (snapshot.state === 'empty') {
+      app.append(el('section', { className: 'empty-state', role: 'status', 'aria-label': 'メモと Todo はありません' }, [
+        el('p', {}, ['メモも Todo もまだありません。ここから作成できます。']),
+        el('div', { className: 'empty-actions' }, [
+          el('button', {
+            type: 'button', 'aria-label': '新規メモを作成',
+            onclick: () => vscode.postMessage({ kind: 'newMemo' }),
+          }, ['新規メモ']),
+          el('button', {
+            type: 'button', 'aria-label': '新規 Todo を作成',
+            onclick: () => vscode.postMessage({ kind: 'newTodo' }),
+          }, ['新規 Todo']),
+        ]),
+      ]));
+      return;
+    }
+    if (snapshot.state === 'error') {
+      app.append(el('section', { className: 'load-error', role: 'alert' }, [
+        el('p', {}, [snapshot.error || '一覧を読み込めませんでした。']),
+        el('button', {
+          type: 'button', 'aria-label': '一覧を更新',
+          onclick: () => vscode.postMessage({ kind: 'refresh' }),
+        }, ['一覧を更新']),
+      ]));
+      if (!snapshot.files.length) return;
     }
     for (const file of snapshot.files) app.append(renderFile(file));
     if (focused) {

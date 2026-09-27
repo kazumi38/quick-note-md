@@ -49,6 +49,51 @@ suite('Extension commands', () => {
 		await configuration.update('notesDirectory', undefined, vscode.ConfigurationTarget.Workspace);
 	});
 
+	test('contributed views and their commands are available after activation', async () => {
+		const extension = vscode.extensions.all.find(item => item.packageJSON.name === 'quick-note-md');
+		assert.ok(extension);
+		await extension.activate();
+		const views = extension.packageJSON.contributes.views['quick-note-md'].map((view: { id: string }) => view.id);
+		assert.deepStrictEqual(views, ['quick-note-md.sidebar', 'quick-note-md.memos', 'quick-note-md.todos']);
+		const commands = await vscode.commands.getCommands(true);
+		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.refresh']) {
+			assert.ok(commands.includes(name), name);
+		}
+		const contributedCommands = extension.packageJSON.contributes.commands.map((command: { command: string }) => command.command);
+		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.refresh']) {
+			assert.ok(contributedCommands.includes(name), name);
+		}
+	});
+
+	test('empty contexts require successful empty reads and clear on errors', async () => {
+		const target = vscode.commands as typeof vscode.commands & Record<string, unknown>;
+		const original = target.executeCommand;
+		const execute = original as (command: string, ...args: unknown[]) => Promise<unknown>;
+		const contexts = new Map<string, unknown[]>();
+		target.executeCommand = (async (command: string, ...args: unknown[]) => {
+			if (command === 'setContext' && typeof args[0] === 'string') {
+				const values = contexts.get(args[0]) ?? [];
+				values.push(args[1]);
+				contexts.set(args[0], values);
+			}
+			return execute.call(vscode.commands, command, ...args);
+		}) as typeof vscode.commands.executeCommand;
+		try {
+			await vscode.commands.executeCommand('quick-note-md.refresh');
+			assert.deepStrictEqual(contexts.get('quick-note-md.memosEmpty'), [false, true]);
+			assert.deepStrictEqual(contexts.get('quick-note-md.todosEmpty'), [false, true]);
+
+			contexts.clear();
+			await vscode.workspace.fs.delete(notesRoot(), { recursive: true, useTrash: false });
+			await vscode.workspace.fs.writeFile(notesRoot(), Buffer.from('not a directory'));
+			await vscode.commands.executeCommand('quick-note-md.refresh');
+			assert.deepStrictEqual(contexts.get('quick-note-md.memosEmpty'), [false]);
+			assert.deepStrictEqual(contexts.get('quick-note-md.todosEmpty'), [false]);
+		} finally {
+			target.executeCommand = original;
+		}
+	});
+
 	test('newMemo creates unique managed files and appendMemo writes only to the selected note', async () => {
 		queueInput('日本語メモ', '日本語メモ', '追記');
 		await vscode.commands.executeCommand('quick-note-md.newMemo');

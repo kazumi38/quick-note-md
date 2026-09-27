@@ -28,6 +28,9 @@ export function computeDueState(dueDate: string | undefined, status: TodoStatus,
 /** Every message the webview can send; unknown/malformed shapes are ignored rather than trusted. */
 type SidebarMessage =
 	| { kind: 'ready' }
+	| { kind: 'newMemo' }
+	| { kind: 'newTodo' }
+	| { kind: 'refresh' }
 	| { kind: 'source'; id: string }
 	| { kind: 'openFile'; fileUri: string }
 	| { kind: 'setStatus'; id: string; status: string }
@@ -52,6 +55,7 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 	private view: vscode.WebviewView | undefined;
 	private todos: TodoRef[] = [];
 	private disposed = false;
+	private generation = 0;
 	private readonly drafts: DraftManager;
 	private readonly draftStore: DraftStore;
 
@@ -70,13 +74,29 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 
 	async refresh(): Promise<void> {
 		if (this.disposed) { return; }
-		try {
-			this.todos = await this.store.todos();
-		} catch {
-			this.todos = [];
+		const generation = ++this.generation;
+		this.todos = [];
+		await this.view?.webview.postMessage({
+			kind: 'snapshot', state: 'loading', files: [], todos: [], orphans: [], labelPalette: [],
+		});
+		if (this.disposed || generation !== this.generation) { return; }
+		if (!vscode.workspace.workspaceFolders?.length) {
+			await this.view?.webview.postMessage({
+				kind: 'snapshot', state: 'unavailable', error: 'ワークスペース フォルダーを開いてください。',
+				files: [], todos: [], orphans: [], labelPalette: [...labelPalette],
+			});
 			return;
 		}
-		const files = await this.store.list().catch(() => []);
+
+		const [todoResult, fileResult] = await Promise.allSettled([this.store.todos(), this.store.list()]);
+		if (this.disposed || generation !== this.generation) { return; }
+		this.todos = todoResult.status === 'fulfilled' ? todoResult.value : [];
+		const files = fileResult.status === 'fulfilled' ? fileResult.value : [];
+		const errors = [
+			...(todoResult.status === 'rejected' ? [todoResult.reason] : []),
+			...(fileResult.status === 'rejected' ? [fileResult.reason] : []),
+		];
+		const error = errors.map(reason => reason instanceof Error ? reason.message : '一覧を読み込めませんでした。').join('\n');
 		let reconciled: ReconciledDraft[] = [];
 		try { reconciled = await this.drafts.reconcile(this.todos, todo => this.id(todo)); } catch { reconciled = []; }
 		const draftsById = new Map<string, DraftView>();
@@ -94,9 +114,23 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 				state: entry.state, text: entry.snapshot.text, labels: entry.snapshot.labels, dueDate: entry.snapshot.dueDate,
 			});
 		}
+		const viewState = errors.length ? 'error' : files.length || this.todos.length ? 'ready' : 'empty';
+		const displayFiles = new Map(files.map(file => [file.uri.toString(), file]));
+		for (const todo of this.todos) {
+			const uri = todo.uri.toString();
+			if (!displayFiles.has(uri)) {
+				displayFiles.set(uri, {
+					uri: todo.uri,
+					title: todo.uri.path.split('/').pop()?.replace(/\.md$/i, '') || todo.uri.fsPath,
+					mtime: 0,
+				});
+			}
+		}
 		const snapshot = {
+			state: viewState,
+			error: error || undefined,
 			labelPalette: [...labelPalette],
-			files: files.map(file => ({ uri: file.uri.toString(), title: file.title })),
+			files: [...displayFiles.values()].map(file => ({ uri: file.uri.toString(), title: file.title })),
 			todos: this.todos.map(todo => {
 				const id = this.id(todo);
 				const replies = (todo.comments?.comments ?? []).map(reply => ({
@@ -117,6 +151,7 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 			}),
 			orphans,
 		};
+		if (this.disposed || generation !== this.generation) { return; }
 		await this.view?.webview.postMessage({ kind: 'snapshot', ...snapshot });
 	}
 
@@ -159,6 +194,14 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 		if (!value || typeof value !== 'object' || Array.isArray(value)) { return; }
 		const message = value as SidebarMessage;
 		if (message.kind === 'ready') { await this.refresh(); return; }
+		if (message.kind === 'newMemo' || message.kind === 'newTodo') {
+			await vscode.commands.executeCommand(`quick-note-md.${message.kind}`);
+			return;
+		}
+		if (message.kind === 'refresh') {
+			await vscode.commands.executeCommand('quick-note-md.refresh');
+			return;
+		}
 		if (message.kind === 'openFile') {
 			if (typeof message.fileUri !== 'string') { return; }
 			await vscode.commands.executeCommand('quick-note-md.openMemo', vscode.Uri.parse(message.fileUri));

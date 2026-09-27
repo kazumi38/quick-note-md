@@ -110,7 +110,8 @@ export class TodoProvider implements vscode.TreeDataProvider<StatusNode | TodoNo
 	}
 	update(items: TodoRef[]): void {
 		this.items = statusOrder.map(status => new StatusNode(status,
-			items.filter(item => item.status === status).map(item => new TodoNode(item))));
+			items.filter(item => item.status === status).map(item => new TodoNode(item))))
+			.filter(status => status.items.length > 0);
 		this.changed.fire();
 	}
 	dispose(): void { this.changed.dispose(); }
@@ -125,7 +126,10 @@ export class Sidebar implements vscode.Disposable {
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private disposed = false;
 
-	constructor(private readonly store: DocumentStore) {}
+	constructor(private readonly store: DocumentStore) {
+		this.memoView.message = '読み込み中…';
+		this.todoView.message = '読み込み中…';
+	}
 
 	schedule(): void {
 		if (this.disposed) { return; }
@@ -137,23 +141,49 @@ export class Sidebar implements vscode.Disposable {
 	async refresh(): Promise<void> {
 		if (this.disposed) { return; }
 		const generation = ++this.generation;
-		try {
-			const [memos, todos] = await Promise.all([this.store.list(), this.store.todos()]);
-			if (this.disposed || generation !== this.generation) { return; }
+		this.memos.update([]);
+		this.todos.update([]);
+		this.memoView.message = '読み込み中…';
+		this.todoView.message = '読み込み中…';
+		this.todoView.badge = undefined;
+		await Promise.all([
+			vscode.commands.executeCommand('setContext', 'quick-note-md.memosEmpty', false),
+			vscode.commands.executeCommand('setContext', 'quick-note-md.todosEmpty', false),
+		]);
+		if (this.disposed || generation !== this.generation) { return; }
+		if (!vscode.workspace.workspaceFolders?.length) {
+			this.memoView.message = 'ワークスペース フォルダーを開いてください。';
+			this.todoView.message = 'ワークスペース フォルダーを開いてください。';
+			return;
+		}
+
+		const [memoResult, todoResult] = await Promise.allSettled([this.store.list(), this.store.todos()]);
+		if (this.disposed || generation !== this.generation) { return; }
+		if (memoResult.status === 'fulfilled') {
+			const memos = memoResult.value;
 			this.memos.update(memos.map(memo => new MemoNode(memo.uri, memo.title, memo.mtime)));
+			await vscode.commands.executeCommand('setContext', 'quick-note-md.memosEmpty', memos.length === 0);
+			if (this.disposed || generation !== this.generation) { return; }
+			this.memoView.message = undefined;
+		} else {
+			this.memos.update([]);
+			this.memoView.message = memoResult.reason instanceof Error
+				? memoResult.reason.message : 'メモ一覧を読み込めませんでした。';
+		}
+
+		if (todoResult.status === 'fulfilled') {
+			const todos = todoResult.value;
 			this.todos.update(todos);
+			await vscode.commands.executeCommand('setContext', 'quick-note-md.todosEmpty', todos.length === 0);
+			if (this.disposed || generation !== this.generation) { return; }
 			const count = todos.filter(todo => ['open', 'warn', 'important'].includes(todo.status)).length;
 			this.todoView.badge = { value: count, tooltip: '未解決（未完了・Warn・IMP）' };
-			this.todoView.message = `未解決 ${count} 件（未完了・Warn・IMP）`;
-			this.memoView.message = memos.length ? undefined : '「新規メモ」から Markdown メモを作成できます。';
-		} catch (error) {
-			if (this.disposed || generation !== this.generation) { return; }
-			this.memos.update([]);
+			this.todoView.message = todos.length ? `未解決 ${count} 件（未完了・Warn・IMP）` : undefined;
+		} else {
 			this.todos.update([]);
 			this.todoView.badge = undefined;
-			const message = error instanceof Error ? error.message : '一覧を読み込めませんでした。';
-			this.memoView.message = message;
-			this.todoView.message = message;
+			this.todoView.message = todoResult.reason instanceof Error
+				? todoResult.reason.message : 'Todo 一覧を読み込めませんでした。';
 		}
 	}
 

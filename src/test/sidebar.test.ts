@@ -96,6 +96,15 @@ suite('Sidebar and settings', () => {
 		const extension = vscode.extensions.all.find(item => item.packageJSON.name === 'quick-note-md');
 		assert.ok(extension, 'QuickNoteMD extension is installed in the test host');
 		await extension.activate();
+		const views = extension.packageJSON.contributes.views['quick-note-md'].map((view: { id: string }) => view.id);
+		assert.deepStrictEqual(views, ['quick-note-md.sidebar', 'quick-note-md.memos', 'quick-note-md.todos']);
+		const welcome = extension.packageJSON.contributes.viewsWelcome;
+		assert.ok(welcome.some((item: { view: string; contents: string; when: string }) =>
+			item.view === 'quick-note-md.memos' && item.contents.includes('quick-note-md.newMemo') &&
+			item.when === 'quick-note-md.memosEmpty'));
+		assert.ok(welcome.some((item: { view: string; contents: string; when: string }) =>
+			item.view === 'quick-note-md.todos' && item.contents.includes('quick-note-md.newTodo') &&
+			item.when === 'quick-note-md.todosEmpty'));
 		const commands = await vscode.commands.getCommands(true);
 		for (const name of ['newMemo', 'appendMemo', 'openMemo', 'newTodo', 'completeTodo', 'reopenTodo',
 			'changeStatus', 'deleteTodo', 'showSource', 'showRendered', 'toggleView', 'refresh']) {
@@ -104,6 +113,19 @@ suite('Sidebar and settings', () => {
 		assert.strictEqual(extension.packageJSON.contributes.customEditors[0].priority, 'option');
 		assert.strictEqual(extension.packageJSON.contributes.configuration.properties['quick-note-md.defaultView'].default,
 			'rendered');
+		for (const view of views) {
+			assert.ok(extension.packageJSON.activationEvents.includes(`onView:${view}`), `${view} activates the extension`);
+		}
+	});
+
+	test('empty Todo provider has no root children', () => {
+		const provider = new TodoProvider();
+		try {
+			provider.update([]);
+			assert.deepStrictEqual(provider.getChildren(), []);
+			provider.update([todo]);
+			assert.ok((provider.getChildren() as StatusNode[]).some(group => group.items.length > 0));
+		} finally { provider.dispose(); }
 	});
 
 	test('source fallback remains available outside the managed directory', async () => {
