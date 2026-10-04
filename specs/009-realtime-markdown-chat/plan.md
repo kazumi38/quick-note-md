@@ -1,6 +1,6 @@
 # 実装計画: 入力中に描画する Markdown チャット UI
 
-**ブランチ**: `kazumi38-realtime-markdown-chat` | **日付**: 2026-10-04 | **仕様**: [spec.md](spec.md)
+**ブランチ**: `kazumi38-009-feature-plan` | **日付**: 2026-10-04 | **仕様**: [spec.md](spec.md)
 
 ## 概要
 
@@ -72,13 +72,16 @@ src/
 ├── rendering.ts             # 既存 safe markdown-it renderer を継続利用
 ├── extension.ts             # 旧 TODO/MEMO view 登録をチャット view へ置換
 ├── webview/
+│   ├── chat.ts              # Webview entry point; webpack bundles to media/chat.js
 │   └── chatComposer.ts      # ProseMirror schema、markdown-it adapter、input/key rules
 └── test/
     ├── chatMarkdown.test.ts
     ├── chatDrafts.test.ts
-    └── chatView.test.ts
+    ├── chatView.test.ts
+    ├── chatComposer.test.ts
+    └── chatMarkdown.compatibility.test.ts
 media/
-├── chat.js                  # Webview 用 bundle
+├── chat.js                  # src/webview/chat.ts から生成する Webview bundle
 └── chat.css
 package.json                 # editor modules と Webview build script
 package-lock.json            # npm dependencies の lockfile
@@ -87,6 +90,8 @@ tsconfig.webview.json        # DOM 型を Webview entry に限定
 ```
 
 **構成判断**: VS Code Extension Host がファイルアクセス、スナップショット、衝突・保存処理を担当する。Webview は ProseMirror 文書と画面を所有し、入力ごとに Extension Host へ描画依頼を往復せずローカルで即時更新する。Extension Host は送信・状態変更時に最新のファイル／文書状態を再検証する。依存は Webview bundle 内に閉じ、Extension Host へ DOM 用コードを読み込まない。
+
+`src/webview/chat.ts` は Webview の TypeScript entry point、`media/chat.js` は webpack が生成する配布 bundle とする。CSS は `media/chat.css` を Webview HTML から読み込む。`src/test/chatComposer.test.ts` と `src/test/chatMarkdown.compatibility.test.ts` はそれぞれ編集モデルと既存 Markdown 互換性を検証する。
 
 ## 複雑性の追跡
 
