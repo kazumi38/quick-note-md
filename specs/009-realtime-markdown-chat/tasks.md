@@ -1,244 +1,244 @@
 ---
 
-description: "入力中に描画する Markdown チャット UI の実装タスク"
+description: "入力中に描画する Markdown チャット UI の実装タスク一覧"
 ---
 
-# Tasks: 入力中に描画する Markdown チャット UI
+# タスク: 入力中に描画する Markdown チャット UI
 
-**Input**: Design documents from `specs/009-realtime-markdown-chat/`
+**入力資料**: `specs/009-realtime-markdown-chat/` の設計資料
 
-**Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`
+**前提資料**: `plan.md`、`spec.md`、`research.md`、`data-model.md`、`contracts/`、`quickstart.md`
 
-**Tests**: Unit・integration tests are included because the quickstart and plan require parser, serializer, persistence, and Webview validation.
+**テスト**: quickstart と plan で parser、serializer、保存処理、Webview の検証が求められているため、単体テストと結合テストを含める。
 
-**Organization**: Tasks are grouped by user story in specification priority order. Test tasks precede implementation for their story.
+**構成**: 仕様に記載された優先順位に従い、ユーザーストーリーごとにタスクを整理する。各ストーリーではテストを実装より先に行う。
 
-## Phase 1: Setup
+## フェーズ 1: セットアップ
 
-**Purpose**: Add the Webview build and editor dependencies described by the plan without changing the Extension Host runtime bundle.
+**目的**: plan に記載された Webview のビルド設定とエディター依存パッケージを追加し、Extension Host の実行バンドルには混入させない。
 
-- [ ] T001 Add required ProseMirror model, state, view, commands, history, keymap, input-rules, Markdown, and table packages in `package.json` and update `package-lock.json`
-- [ ] T002 Add a Webview TypeScript configuration with DOM libraries and strict project settings in `tsconfig.webview.json`
-- [ ] T003 Configure separate Extension Host and chat Webview bundle entries and output `media/chat.js` in `webpack.config.js`
-
----
-
-## Phase 2: Foundational
-
-**Purpose**: Establish the shared chat Markdown model and strict parsing rules required by browsing, composing, and saving.
-
-- [ ] T004 [P] Add parser and serializer contract tests for title, sections, message markers, nested headings, legacy files, ambiguous input, and line endings in `src/test/chatMarkdown.test.ts`
-- [ ] T005 Implement chat thread, section, message, parse-state, and source-range types plus strict marker-pair parsing and message serialization in `src/chatMarkdown.ts`
-- [ ] T006 Define shared Webview message discriminants and runtime guards for required fields, IDs, revisions, and Markdown input in `src/chatProtocol.ts`
-- [ ] T007 Extend the existing document-store API with safe-root, dirty-document, read-only, conflict, and serialized write operations required by chat create, append, and marker-only updates in `src/documents.ts`
-- [ ] T008 Configure chat-specific constants, default view registration identifiers, and activation wiring without changing document ownership rules in `src/configuration.ts` and `src/extension.ts`
-
-**Checkpoint**: Chat documents can be parsed and validated without UI or file writes; shared Webview messages and guarded document operations are defined.
+- [ ] T001 `package.json` に ProseMirror の model、state、view、commands、history、keymap、input-rules、Markdown、table 用パッケージを追加し、`package-lock.json` を更新する
+- [ ] T002 DOM ライブラリと strict 設定を使う Webview 用 TypeScript 設定を `tsconfig.webview.json` に追加する
+- [ ] T003 `webpack.config.js` で Extension Host とチャット Webview のエントリを分け、Webview バンドルを `media/chat.js` に出力する
 
 ---
 
-## Phase 3: User Story 1 - 送信せずに入力結果をチャット内で確認する (Priority: P1) 🎯 MVP
+## フェーズ 2: 基盤
 
-**Goal**: Provide a multiline, directly editable ProseMirror composer that renders Markdown in place while preserving input state and never sending on Enter.
+**目的**: チャットの閲覧、入力、保存に共通して必要な Markdown データモデルと厳密な解析規則を整える。
 
-**Independent Test**: Type, edit, paste, undo, and redo headings, emphasis, lists, code, tables, and Japanese text in an unsent composer; verify the composer itself renders the latest content and the chat file remains unchanged.
+- [ ] T004 [P] タイトル、セクション、メッセージ境界、入れ子見出し、旧形式ファイル、曖昧な入力、改行形式を対象とする parser／serializer の契約テストを `src/test/chatMarkdown.test.ts` に追加する
+- [ ] T005 チャットスレッド、セクション、メッセージ、解析状態、原文範囲の型と、境界コメント対の厳密な解析・メッセージ直列化を `src/chatMarkdown.ts` に実装する
+- [ ] T006 Webview メッセージの種別と、必須フィールド、ID、revision、Markdown 入力を検査する実行時ガードを `src/chatProtocol.ts` に定義する
+- [ ] T007 チャット作成、追記、境界マーカーのみの更新に必要な管理対象ルート、dirty document、読み取り専用、競合、直列化書き込みのガードを既存の `src/documents.ts` に追加する
+- [ ] T008 ファイルの所有権規則を変えずに、チャット用定数、既定ビュー登録 ID、起動時連携を `src/configuration.ts` と `src/extension.ts` に設定する
 
-### Tests for User Story 1
-
-- [ ] T009 [P] [US1] Add tests for Markdown parsing/serialization, task and callout nodes, incomplete syntax, and round-trip content preservation in `src/test/chatComposer.test.ts`
-
-### Implementation for User Story 1
-
-- [ ] T010 [US1] Implement the ProseMirror document schema, markdown-it token mapping, Markdown serializer, and permitted inline/block nodes in `src/webview/chatComposer.ts`
-- [ ] T011 [US1] Implement input rules, paste parsing, undo/redo, task state editing, and callout editing in `src/webview/chatComposer.ts`
-- [ ] T012 [US1] Implement Enter, Shift+Enter, and Backspace rules for headings, lists, check items, callouts, empty blocks, and paragraph joins in `src/webview/chatComposer.ts`
-- [ ] T013 [US1] Preserve selection, caret, focus, and IME composition across transactions; defer structural rendering during composition and reconcile the latest draft on composition end in `src/webview/chatComposer.ts`
-- [ ] T014 [US1] Add the composer layout, task/callout visuals, focus indicators, narrow-panel wrapping, and local code/table overflow rules in `media/chat.css`
-- [ ] T015 [US1] Implement per-draft editor state and latest-revision rendering in the Webview entry point `src/webview/chat.ts`
-
-**Checkpoint**: The composer edits and renders Markdown locally with no preview pane or file write; the behavior remains stable through composition, selection, history, and keyboard editing.
+**完了条件**: UI やファイル書き込みなしでチャット文書を解析・検証でき、共通 Webview メッセージとガード付き文書操作が定義されている。
 
 ---
 
-## Phase 4: User Story 2 - チャットを選び、保存済みの会話を読む (Priority: P1)
+## フェーズ 3: ユーザーストーリー 1 - 送信前にチャット内で入力結果を確認する (優先度: P1) 🎯 MVP
 
-**Goal**: Replace the old TODO/MEMO sidebar management UI with a chat list, selectable thread, and safe formatted message rendering.
+**目標**: Markdown を入力欄内で描画し、入力状態を保って直接編集できる複数行 ProseMirror 入力欄を提供する。Enter で送信してはならない。
 
-**Independent Test**: Load multiple valid and unsupported Markdown chat files; verify list ordering, selection, sections, message order, safe rendering, empty/unavailable/error states, and source-opening guidance.
+**独立検証**: 未送信の入力欄で見出し、強調、リスト、コード、表、日本語を入力・編集・貼り付け・Undo／Redo する。入力欄自体に最新内容が描画され、チャットファイルが変更されないことを確認する。
 
-### Tests for User Story 2
+### ユーザーストーリー 1 のテスト
 
-- [ ] T016 [P] [US2] Add sidebar snapshot, list ordering, selection, empty-state, unsupported-format, and source-opening tests in `src/test/chatView.test.ts`
+- [ ] T009 [P] [US1] Markdown の解析／直列化、タスク・注意書きノード、未完成の記法、往復変換での内容保持を検証するテストを `src/test/chatComposer.test.ts` に追加する
 
-### Implementation for User Story 2
+### ユーザーストーリー 1 の実装
 
-- [ ] T017 [US2] Implement managed-directory chat discovery, stable update-time ordering, opaque chat IDs, and parse-state summaries in `src/chatView.ts`
-- [ ] T018 [US2] Build complete generation-numbered snapshots with selected thread, section order, dirty-source state, and safe Markdown HTML from the existing renderer in `src/chatView.ts`
-- [ ] T019 [US2] Implement the Webview chat list, selection, thread sections, message timestamps, status labels, empty/loading/error/unavailable states, and source-open action in `src/webview/chat.ts`
-- [ ] T020 [US2] Replace the old TODO/MEMO view providers and contributed view metadata with the chat view registration in `src/extension.ts` and `package.json`
-- [ ] T021 [US2] Add list, thread, message, error, accessibility, and responsive styles in `media/chat.css`
+- [ ] T010 [US1] ProseMirror 文書スキーマ、markdown-it token 対応、Markdown serializer、許可する inline／block ノードを `src/webview/chatComposer.ts` に実装する
+- [ ] T011 [US1] 入力規則、貼り付け時の解析、Undo／Redo、タスク状態編集、注意書き編集を `src/webview/chatComposer.ts` に実装する
+- [ ] T012 [US1] 見出し、リスト、チェック項目、注意書き、空ブロック、段落結合に対する Enter、Shift+Enter、Backspace の動作を `src/webview/chatComposer.ts` に実装する
+- [ ] T013 [US1] transaction 中も選択範囲、キャレット、フォーカス、日本語 IME 変換を維持する。変換中は構造描画を保留し、変換確定時に最新下書きへ反映する処理を `src/webview/chatComposer.ts` に実装する
+- [ ] T014 [US1] 入力欄の配置、タスク／注意書き表示、フォーカス表示、狭いパネルでの折り返し、コード／表の領域内 overflow を `media/chat.css` に追加する
+- [ ] T015 [US1] 下書きごとの編集状態と最新 revision の描画を Webview のエントリポイント `src/webview/chat.ts` に実装する
 
-**Checkpoint**: Existing Markdown files can be browsed as safe chat threads; unsupported structures remain readable and are never silently rewritten.
-
----
-
-## Phase 5: User Story 3 - 本文・返信を送信し、ファイルとして残す (Priority: P1)
-
-**Goal**: Create one Markdown file for each new chat and append replies to the correct existing section while preserving the user's Markdown and file content.
-
-**Independent Test**: Create a titled chat with one body message and two replies; verify exactly one file, correct marker pairs and order, and the same rendered thread after reloading.
-
-### Tests for User Story 3
-
-- [ ] T022 [P] [US3] Add tests for new-chat serialization, section append, marker uniqueness, title collisions, empty submissions, duplicate-send prevention, and revision-safe acknowledgements in `src/test/chatPersistence.test.ts`
-
-### Implementation for User Story 3
-
-- [ ] T023 [US3] Implement safe chat file creation, title-to-filename normalization, collision avoidance, and initial body message serialization through guarded document operations in `src/documents.ts`
-- [ ] T024 [US3] Implement minimal append of a dated message to an existing or newly created section while preserving unrelated source ranges and LF/CRLF in `src/documents.ts`
-- [ ] T025 [US3] Implement explicit send handling with input validation, operation deduplication, Host-generated timestamps/message IDs, current-version revalidation, and revision-aware results in `src/chatView.ts`
-- [ ] T026 [US3] Connect the composer send action to the validated Host protocol and clear only the matching successfully saved draft revision in `src/webview/chat.ts`
-- [ ] T027 [US3] Implement Markdown-only draft backup storage, fingerprint/version conflict detection, recovery, and explicit restore/discard handling in `src/chatDrafts.ts`
-- [ ] T028 [US3] Integrate draft save/acknowledgement, send results, post-send snapshots, and recovery prompts in `src/chatView.ts` and `src/webview/chat.ts`
-
-**Checkpoint**: A successful explicit send persists once and refreshes the selected thread; failed or stale sends retain the editable draft.
+**完了条件**: 入力欄が別プレビューやファイル書き込みなしに Markdown を編集・描画し、日本語変換、選択、Undo 履歴、キーボード編集でも動作が安定している。
 
 ---
 
-## Phase 6: User Story 4 - 外部編集と保存失敗でも入力を失わない (Priority: P2)
+## フェーズ 4: ユーザーストーリー 2 - チャットを選び、保存済みの会話を読む (優先度: P1)
 
-**Goal**: Reflect file and unsaved-source changes promptly, preserve recoverable drafts, and stop writes whenever the latest source cannot be safely verified.
+**目標**: 旧 TODO／MEMO サイドバー管理 UI をチャット一覧、選択可能なスレッド、安全な整形済みメッセージ表示に置き換える。
 
-**Independent Test**: Modify, create, move, or delete a selected file; leave its VS Code editor dirty; and simulate conflict, read-only, and save failure. Verify updated status or explicit errors, blocked writes, and recoverable drafts.
+**独立検証**: 有効形式と非対応形式のチャット Markdown ファイルを複数読み込み、一覧順、選択、セクション、メッセージ順、安全な描画、空／利用不可／エラー状態、原文を開く案内を確認する。
 
-### Tests for User Story 4
+### ユーザーストーリー 2 のテスト
 
-- [ ] T029 [P] [US4] Add tests for draft fingerprint conflicts, corrupt/unknown draft versions, orphan recovery, and revision isolation in `src/test/chatDrafts.test.ts`
-- [ ] T030 [P] [US4] Add tests for dirty-source snapshots, file change refresh, missing targets, conflict/read-only/save failure, and unchanged drafts in `src/test/chatView.test.ts`
+- [ ] T016 [P] [US2] サイドバー snapshot、一覧順、選択、空状態、非対応形式、原文表示を検証するテストを `src/test/chatView.test.ts` に追加する
 
-### Implementation for User Story 4
+### ユーザーストーリー 2 の実装
 
-- [ ] T031 [US4] Integrate file create/change/delete/move events and workspace/configuration changes with list and selected-thread refresh in `src/chatView.ts` and `src/extension.ts`
-- [ ] T032 [US4] Reflect unsaved TextDocument content and dirty state in chat snapshots, and reject send/toggle operations until save or revert in `src/chatView.ts`
-- [ ] T033 [US4] Implement stale fingerprint, missing URI, unsupported parse, and base-version checks for draft restoration and sending in `src/chatDrafts.ts` and `src/chatView.ts`
-- [ ] T034 [US4] Return explicit protocol error codes and Japanese recovery guidance while retaining composer text for conflict, dirty document, read-only, invalid target, and save failure in `src/chatView.ts` and `src/webview/chat.ts`
+- [ ] T017 [US2] 管理対象ディレクトリ内のチャット検出、更新時刻による安定した並べ替え、外部公開しないチャット ID、解析状態の要約を `src/chatView.ts` に実装する
+- [ ] T018 [US2] 選択中のスレッド、セクション順、原文 dirty 状態、既存 renderer による安全な Markdown HTML を含む世代番号付き snapshot を `src/chatView.ts` に構築する
+- [ ] T019 [US2] チャット一覧、選択、スレッドの各セクション、メッセージ日時、状態ラベル、空／読込中／エラー／利用不可表示、原文を開く操作を `src/webview/chat.ts` に実装する
+- [ ] T020 [US2] 旧 TODO／MEMO view provider とビュー定義を、チャットビュー登録に置き換える。対象は `src/extension.ts` と `package.json`
+- [ ] T021 [US2] 一覧、スレッド、メッセージ、エラー、アクセシビリティ、レスポンシブ表示のスタイルを `media/chat.css` に追加する
 
-**Checkpoint**: External and unsaved source changes never appear as current without being identified; send failures preserve the draft and never claim success.
-
----
-
-## Phase 7: User Story 5 - 狭いサイドパネルでも安全に操作する (Priority: P2)
-
-**Goal**: Support accessible keyboard workflows and narrow panels while rendering untrusted Markdown without script execution, navigation, or remote resource loading.
-
-**Independent Test**: At 280px, 400px, and 800px, use keyboard-only workflows on long Japanese text, URLs, code, tables, unsafe links, HTML, and images; verify no panel overflow or unsafe activity.
-
-### Tests for User Story 5
-
-- [ ] T035 [P] [US5] Add tests confirming unsafe HTML is disabled, links remain inactive, images do not fetch, and chat content uses the existing safe renderer in `src/test/chatView.test.ts`
-- [ ] T036 [P] [US5] Add keyboard accessibility and responsive Webview smoke scenarios for the chat composer and thread in `specs/009-realtime-markdown-chat/acceptance-tests.md`
-
-### Implementation for User Story 5
-
-- [ ] T037 [US5] Implement Host-side task identity resolution and marker-only guarded toggles with document version, dirty, conflict, and read-only checks in `src/chatView.ts` and `src/documents.ts`
-- [ ] T038 [US5] Implement composer and rendered-message task controls with optimistic state rollback on failed toggle results in `src/webview/chat.ts`
-- [ ] T039 [US5] Ensure Webview CSP, inactive link presentation, image alt-text rendering, and untrusted HTML handling retain the existing safe Markdown policy in `src/rendering.ts` and `src/chatView.ts`
-- [ ] T040 [US5] Add labeled controls, visible focus/status announcements, keyboard navigation, and responsive overflow behavior in `media/chat.css` and `src/webview/chat.ts`
-
-**Checkpoint**: Keyboard and narrow-panel interactions work without weakening rendering security; task changes affect only the intended marker and roll back on failure.
+**完了条件**: 既存 Markdown ファイルを安全なチャットスレッドとして閲覧でき、非対応構造も読める状態に保たれ、無断で書き換えられない。
 
 ---
 
-## Phase 8: Polish & Cross-Cutting Validation
+## フェーズ 5: ユーザーストーリー 3 - 本文・返信を送信し、ファイルとして残す (優先度: P1)
 
-**Purpose**: Validate the integrated feature against the acceptance scenarios, performance targets, package scripts, and user documentation.
+**目標**: 新しいチャットごとに Markdown ファイルを1つ作成し、既存セクションに返信を追記する。ユーザーの Markdown と既存ファイル内容を保持する。
 
-- [ ] T041 [P] Update extension descriptions, chat commands/view labels, and user-facing usage documentation for the new chat workflow in `package.json` and `README.md`
-- [ ] T042 Run parser, composer, draft, document-store, and chat-view test suites and resolve regressions in `src/test/`
-- [ ] T043 Run `npm run compile-tests`, `npm run compile`, and `npm run lint`; correct TypeScript, Webpack, and ESLint failures in the affected project files
-- [ ] T044 Execute acceptance tests AT-01 through AT-26 in an isolated workspace and record OS, VS Code version, viewport widths, and results in `specs/009-realtime-markdown-chat/acceptance-tests.md`
-- [ ] T045 Measure 100 composer edits on a 1,000-line, at-most-32,000-character draft and record the latency distribution in `specs/009-realtime-markdown-chat/acceptance-tests.md`
+**独立検証**: タイトル付きチャットに本文メッセージ1件と返信2件を作成し、ファイルが1つだけであること、境界マーカー対と順序が正しいこと、再読込後も同じスレッドが表示されることを確認する。
 
----
+### ユーザーストーリー 3 のテスト
 
-## Dependencies & Execution Order
+- [ ] T022 [P] [US3] 新規チャットの直列化、セクション追記、境界マーカーの一意性、タイトル衝突、空送信、二重送信防止、revision を考慮した応答を検証するテストを `src/test/chatPersistence.test.ts` に追加する
 
-### Phase Dependencies
+### ユーザーストーリー 3 の実装
 
-- **Setup (Phase 1)**: No dependencies; must complete before Webview implementation.
-- **Foundational (Phase 2)**: Depends on Setup and blocks all user stories.
-- **User Stories (Phases 3-7)**: Depend on Foundation and follow the P1/P2 priority order below.
-- **Polish (Phase 8)**: Depends on all five stories; run compile, lint, and acceptance validation after integration.
+- [ ] T023 [US3] ガード付き文書操作を通じた安全なチャットファイル作成、タイトルからファイル名への安全な変換、名前衝突の回避、初回本文メッセージの直列化を `src/documents.ts` に実装する
+- [ ] T024 [US3] 既存または新規セクションへ日時付きメッセージを最小範囲で追記し、無関係な原文範囲と LF／CRLF を保持する処理を `src/documents.ts` に実装する
+- [ ] T025 [US3] 入力検証、操作の重複排除、Host 側での日時／メッセージ ID 生成、最新バージョンの再検証、revision を考慮した結果返却を含む明示的な送信処理を `src/chatView.ts` に実装する
+- [ ] T026 [US3] 入力欄の送信操作を検証済み Host protocol に接続し、保存に成功した一致 revision の下書きだけを `src/webview/chat.ts` で消去する
+- [ ] T027 [US3] Markdown のみを保存する下書きバックアップ、fingerprint／version による競合検出、復旧、明示的な復元／破棄を `src/chatDrafts.ts` に実装する
+- [ ] T028 [US3] 下書き保存／応答、送信結果、送信後 snapshot、復旧案内を `src/chatView.ts` と `src/webview/chat.ts` 間で連携する
 
-### User Story Dependencies
-
-- **US1 (P1)**: Starts after Foundation; independent local composer MVP, no persisted chat required.
-- **US2 (P1)**: Starts after Foundation; relies on the shared parser and safe renderer, but can be tested with fixture files without US1.
-- **US3 (P1)**: Depends on US1 composer and US2 chat selection/snapshot integration to complete the specified end-to-end send workflow.
-- **US4 (P2)**: Depends on US2 file snapshots and US3 send/draft persistence paths.
-- **US5 (P2)**: Depends on US1 composer, US2 message rendering, and US3/US4 operation results for safe task toggles and recovery.
-
-### Within Each User Story
-
-- Story tests precede the implementation they exercise.
-- Tasks touching the same source file are sequential; separate test, style, parser, and view files can be parallel only where no unfinished task is a prerequisite.
-- Send, task-toggle, or restore UI must not be marked complete until its Host-side guard and failure behavior are implemented.
-
-### Parallel Opportunities
-
-- **Setup**: T002 can run alongside T001; T003 follows bundle dependency decisions in T001.
-- **Foundation**: T004 and T006 can start in parallel; T005 follows parser contract tests; T007 is independent of parser implementation.
-- **US1**: T009 can be authored independently; T014 can be implemented independently of the ProseMirror schema; T010-T013 and T015 remain ordered where they share `chatComposer.ts` or `chat.ts`.
-- **US2**: T016 is independent test work; T017/T018 share `chatView.ts` and are sequential; T019/T021 can proceed in parallel with Host snapshot work; T020 follows integration.
-- **US3**: T022 can be written before persistence work; T023 and T027 touch separate files; T024/T025/T026/T028 follow their documented service/protocol dependencies.
-- **US4**: T029 and T030 can be written in parallel; T031/T032/T033/T034 serialize by shared-file dependencies.
-- **US5**: T035 and T036 can be prepared in parallel; T037 Host operations and T040 accessibility work can proceed separately, while T038 follows T037.
-- **Polish**: T041, test execution T042, and runtime validation T044/T045 are parallelizable once their respective stories are integrated; T043 follows source changes.
+**完了条件**: 明示的な送信が成功すると一度だけ保存され、選択中のスレッドが更新される。失敗または古い状態での送信では編集可能な下書きが保持される。
 
 ---
 
-## Parallel Examples
+## フェーズ 6: ユーザーストーリー 4 - 外部編集や保存失敗があっても入力を失わない (優先度: P2)
+
+**目標**: ファイル変更と未保存の原文編集を速やかに反映し、復旧可能な下書きを保持する。最新の原文を安全に検証できない場合は書き込みを停止する。
+
+**独立検証**: 選択中のファイルを変更、作成、移動、削除し、VS Code エディターを未保存状態にする。競合、読み取り専用、保存失敗も再現し、状態更新または明示的エラー、書き込み停止、下書き復旧を確認する。
+
+### ユーザーストーリー 4 のテスト
+
+- [ ] T029 [P] [US4] 下書き fingerprint の競合、破損／未知の下書き形式、紐付け先のない下書きの復旧、revision の分離を検証するテストを `src/test/chatDrafts.test.ts` に追加する
+- [ ] T030 [P] [US4] 原文 dirty 状態の snapshot、ファイル変更後の更新、対象消失、競合／読み取り専用／保存失敗、下書き保持を検証するテストを `src/test/chatView.test.ts` に追加する
+
+### ユーザーストーリー 4 の実装
+
+- [ ] T031 [US4] ファイルの作成／変更／削除／移動イベントとワークスペース／設定の変更を、一覧および選択中スレッドの更新に連携する処理を `src/chatView.ts` と `src/extension.ts` に実装する
+- [ ] T032 [US4] 未保存の TextDocument 内容と dirty 状態をチャット snapshot に反映し、保存または破棄まで送信／切替操作を拒否する処理を `src/chatView.ts` に実装する
+- [ ] T033 [US4] 古い fingerprint、URI 消失、非対応形式、基準 version を確認する下書き復元・送信時の検証を `src/chatDrafts.ts` と `src/chatView.ts` に実装する
+- [ ] T034 [US4] 競合、dirty document、読み取り専用、無効な対象、保存失敗に対して、入力欄の内容を保持したまま明示的な protocol エラーコードと日本語の復旧案内を `src/chatView.ts` と `src/webview/chat.ts` から返す
+
+**完了条件**: 外部変更と未保存原文変更は識別可能な状態で反映される。送信失敗時は下書きが保持され、成功したように表示されない。
+
+---
+
+## フェーズ 7: ユーザーストーリー 5 - 狭いサイドパネルでも安全に操作する (優先度: P2)
+
+**目標**: アクセシブルなキーボード操作と狭いパネル表示を提供し、信頼できない Markdown からのスクリプト実行、ページ遷移、外部リソース読込を防ぐ。
+
+**独立検証**: 幅 280px、400px、800px で長い日本語、URL、コード、表、安全でないリンク、HTML、画像を含む内容をキーボードだけで操作し、パネルのはみ出しや危険な動作がないことを確認する。
+
+### ユーザーストーリー 5 のテスト
+
+- [ ] T035 [P] [US5] 危険な HTML が無効化されること、リンクが遷移しないこと、画像を取得しないこと、既存の安全な renderer でチャット内容を表示することを検証するテストを `src/test/chatView.test.ts` に追加する
+- [ ] T036 [P] [US5] チャット入力欄とスレッドのキーボードアクセシビリティおよびレスポンシブ表示を確認するスモークテスト手順を `specs/009-realtime-markdown-chat/acceptance-tests.md` に追加する
+
+### ユーザーストーリー 5 の実装
+
+- [ ] T037 [US5] Host 側でタスク ID を特定し、文書 version、dirty、競合、読み取り専用を検証して対象マーカーだけを切り替える処理を `src/chatView.ts` と `src/documents.ts` に実装する
+- [ ] T038 [US5] 入力欄と描画済みメッセージのタスク操作を実装し、切替失敗時に表示状態を元へ戻す処理を `src/webview/chat.ts` に追加する
+- [ ] T039 [US5] Webview CSP、遷移しないリンク表示、画像の代替テキスト、信頼できない HTML の扱いについて、既存の安全な Markdown 方針を維持するよう `src/rendering.ts` と `src/chatView.ts` を更新する
+- [ ] T040 [US5] ラベル付き操作、視認可能なフォーカス表示／状態通知、キーボード移動、レスポンシブな overflow 動作を `media/chat.css` と `src/webview/chat.ts` に追加する
+
+**完了条件**: 描画の安全性を弱めることなく、キーボードと狭いパネルで操作できる。タスク状態の変更は対象マーカーだけに反映し、失敗時は元の表示に戻る。
+
+---
+
+## フェーズ 8: 仕上げと横断的な検証
+
+**目的**: 統合した機能を受入シナリオ、性能目標、package script、ユーザー向け文書に照らして検証する。
+
+- [ ] T041 [P] 新しいチャット操作に合わせて拡張機能の説明、チャットコマンド／ビュー名、ユーザー向け利用方法を `package.json` と `README.md` で更新する
+- [ ] T042 parser、入力欄、下書き、文書保存、チャットビューのテスト一式を `src/test/` で実行し、回帰を解消する
+- [ ] T043 `npm run compile-tests`、`npm run compile`、`npm run lint` を実行し、`package.json`、`webpack.config.js`、`src/` に関係する TypeScript、Webpack、ESLint エラーを修正する
+- [ ] T044 隔離ワークスペースで受入テスト AT-01〜AT-26 を実施し、OS、VS Code 版、表示幅、結果を `specs/009-realtime-markdown-chat/acceptance-tests.md` に記録する
+- [ ] T045 1,000 行・最大 32,000 文字の下書きで入力欄を100回編集して計測し、応答時間の分布を `specs/009-realtime-markdown-chat/acceptance-tests.md` に記録する
+
+---
+
+## 依存関係と実行順
+
+### フェーズ間の依存関係
+
+- **セットアップ (フェーズ 1)**: 先行作業はない。Webview 実装の前に完了させる。
+- **基盤 (フェーズ 2)**: セットアップ完了後に着手し、すべてのユーザーストーリーを開始する前に完了させる。
+- **ユーザーストーリー (フェーズ 3〜7)**: 基盤に依存する。以下の P1／P2 優先順位に従って進める。
+- **仕上げ (フェーズ 8)**: 5つのストーリーすべてに依存する。統合後に compile、lint、受入検証を行う。
+
+### ユーザーストーリー間の依存関係
+
+- **US1 (P1)**: 基盤完了後に着手できる。保存済みチャットに依存しない、単独で動作する入力欄 MVP。
+- **US2 (P1)**: 基盤完了後に着手できる。共通 parser と安全な renderer を利用するが、US1 なしでも fixture ファイルで検証できる。
+- **US3 (P1)**: 指定された一連の送信操作を完成させるため、US1 の入力欄と US2 のチャット選択／snapshot 連携に依存する。
+- **US4 (P2)**: US2 のファイル snapshot と US3 の送信／下書き保存経路に依存する。
+- **US5 (P2)**: 安全なタスク切替と復旧のため、US1 の入力欄、US2 のメッセージ表示、US3／US4 の操作結果に依存する。
+
+### 各ユーザーストーリー内の順序
+
+- 各ストーリーのテストは、検証対象の実装より先に行う。
+- 同じソースファイルを変更するタスクは順番に実施する。別のテスト、スタイル、parser、view ファイルの作業は、未完了タスクに依存しない場合に限って並行できる。
+- 送信、タスク切替、復元 UI は、Host 側のガードと失敗時の動作が実装されるまで完了扱いにしない。
+
+### 並行作業できる箇所
+
+- **セットアップ**: T002 は T001 と並行できる。T003 は T001 のバンドル依存関係の決定後に行う。
+- **基盤**: T004 と T006 は並行して開始できる。T005 は parser 契約テスト後に行い、T007 は parser 実装に依存しない。
+- **US1**: T009 の作成は独立して進められる。T014 は ProseMirror スキーマ作業と並行できる。`chatComposer.ts` または `chat.ts` を共有する T010〜T013 と T015 は依存順に進める。
+- **US2**: T016 のテスト作成は独立している。`chatView.ts` を共有する T017／T018 は順番に行う。T019／T021 は Host snapshot 作業と並行できる。T020 は連携作業後に行う。
+- **US3**: T022 は保存処理の実装前に作成できる。別ファイルを変更する T023 と T027 は並行できる。T024／T025／T026／T028 は記載された service／protocol の依存順に進める。
+- **US4**: T029 と T030 は並行して作成できる。T031〜T034 は同じファイルを変更する依存関係に従い、順番に進める。
+- **US5**: T035 と T036 は並行して準備できる。T037 の Host 操作と T040 のアクセシビリティ作業は別々に進められ、T038 は T037 の後に行う。
+- **仕上げ**: 各ストーリーの統合後は T041、T042、T044／T045 をそれぞれ並行できる。T043 はソース変更後に実施する。
+
+---
+
+## 並行作業の例
 
 ```text
-# Foundation: independent contract and protocol work
-T004 parser/serializer contract tests in src/test/chatMarkdown.test.ts
-T006 Webview protocol guards in src/chatProtocol.ts
-T007 guarded document operations in src/documents.ts
+# 基盤: 独立した契約テスト、protocol、文書操作
+T004 parser／serializer 契約テスト: src/test/chatMarkdown.test.ts
+T006 Webview protocol ガード: src/chatProtocol.ts
+T007 ガード付き文書操作: src/documents.ts
 
-# US2: separate Host and Webview surfaces after the parser contract is stable
-T017-T018 chat snapshots in src/chatView.ts
-T019 chat list/thread rendering in src/webview/chat.ts
-T021 presentation and responsive styles in media/chat.css
+# US2: parser 契約確定後、Host と Webview の別領域を並行作業
+T017〜T018 チャット snapshot: src/chatView.ts
+T019 チャット一覧／スレッド表示: src/webview/chat.ts
+T021 表示とレスポンシブ用スタイル: media/chat.css
 
-# US4: independent draft and snapshot failure test files
-T029 draft recovery tests in src/test/chatDrafts.test.ts
-T030 chat operation failure tests in src/test/chatView.test.ts
+# US4: 下書きと snapshot の独立した失敗テスト
+T029 下書き復旧テスト: src/test/chatDrafts.test.ts
+T030 チャット操作失敗テスト: src/test/chatView.test.ts
 ```
 
 ---
 
-## Implementation Strategy
+## 実装方針
 
-### MVP First (User Story 1)
+### まず MVP を実装する (ユーザーストーリー 1)
 
-1. Complete Setup and Foundation.
-2. Complete US1: real-time in-place Markdown composer with editing, selection, IME, and keyboard semantics.
-3. Validate the independent composer test and confirm unsent edits never modify a chat file.
+1. セットアップと基盤を完了する。
+2. US1 を完了する。入力欄内のリアルタイム Markdown 表示、編集、選択、日本語 IME、キーボード操作を実装する。
+3. 独立した入力欄テストを実施し、未送信の編集がチャットファイルを変更しないことを確認する。
 
-### Incremental Delivery
+### 段階的な提供
 
-1. Add US2 to browse and safely render existing chat files.
-2. Add US3 to create chats, append replies, and recover drafts.
-3. Add US4 to protect data through source changes, external edits, and failed writes.
-4. Add US5 task toggles, accessibility, responsive layout, and security validation.
-5. Run the complete acceptance and performance suites.
+1. US2 を追加し、既存チャットファイルの閲覧と安全な表示を実現する。
+2. US3 を追加し、チャット作成、返信追記、下書き復旧を実現する。
+3. US4 を追加し、原文変更、外部編集、書き込み失敗からデータを保護する。
+4. US5 を追加し、タスク切替、アクセシビリティ、レスポンシブ表示、安全性を検証する。
+5. すべての受入テストと性能テストを実行する。
 
-### Independent Test Criteria
+### 独立した検証条件
 
-- **US1**: Composer itself renders current Markdown during typing, selection/editing, paste, undo/redo, and IME; Enter never sends; no file changes before send.
-- **US2**: Fixture files produce the correct ordered list and thread; safe formatting and all empty/error/unsupported states are distinguishable.
-- **US3**: One new chat with one body and two replies creates exactly one readable Markdown file and survives reload with matching order and content.
-- **US4**: Dirty, externally changed, missing, read-only, and failed-save states block unsafe writes and retain recoverable drafts.
-- **US5**: Keyboard-only operation at 280px, 400px, and 800px remains usable and untrusted Markdown causes no execution, navigation, or external fetch.
+- **US1**: 入力、選択／編集、貼り付け、Undo／Redo、日本語 IME の最中に入力欄そのものが最新の Markdown を描画する。Enter で送信せず、送信前にファイルを変更しない。
+- **US2**: fixture ファイルから正しい順序の一覧とスレッドが表示され、安全な整形と空／エラー／非対応の各状態を区別できる。
+- **US3**: 本文1件と返信2件の新規チャットが読み取り可能な Markdown ファイルを1つだけ作成し、再読込後も順序と内容が一致する。
+- **US4**: dirty、外部変更、対象消失、読み取り専用、保存失敗時に安全でない書き込みを止め、復旧可能な下書きを保持する。
+- **US5**: 幅 280px、400px、800px でキーボードだけの操作ができ、信頼できない Markdown から実行、遷移、外部取得が起こらない。
 
-**MVP scope**: User Story 1, after shared Setup and Foundation.
+**MVP の範囲**: 共通セットアップと基盤の完了後、ユーザーストーリー 1 を実装する。
