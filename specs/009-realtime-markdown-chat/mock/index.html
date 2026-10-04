@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task 009 — チャット操作モック</title>
+  <link rel="stylesheet" href="mock.css">
+  <script defer src="decorations.js"></script>
+  <script defer src="inline-editor.js"></script>
+  <script defer src="mock.js"></script>
+</head>
+<body>
+  <header class="review">
+    <h1>Task 009 / 操作モック</h1>
+    <p>本体未実装・ファイル保存なし。疑似送信と下書きはページ再読込で消えます。</p>
+    <label>確認幅 <select id="width"><option>400</option><option>280</option><option>800</option></select> px</label>
+    <label><input type="checkbox" id="dirty"> 原文未保存を疑似表示</label>
+    <label><input type="checkbox" id="failure"> 保存失敗を疑似発生</label>
+  </header>
+  <main id="panel" aria-label="Quick Note チャット">
+    <header class="brand"><strong>Quick Note</strong><span>仕様確認用</span></header>
+    <button id="new-chat" class="wide">＋ 新しいチャット</button>
+    <nav aria-label="チャット一覧"><h2>チャット一覧</h2><div id="chat-list"></div></nav>
+    <section aria-labelledby="thread-title">
+      <h2 id="thread-title"></h2>
+      <p id="source-state"></p>
+      <div id="messages"></div>
+    </section>
+    <form id="composer">
+      <h2 id="composer-title">新しい返信</h2>
+      <div id="title-field" hidden><label for="title-input">チャットタイトル</label><input id="title-input" type="text"></div>
+      <label id="input-label">メッセージ入力 — その場で整形</label>
+      <p class="input-help">例: # 見出し / **強調** / - [ ] 未完了 / - [x] 完了 / - [!] WARN / &gt; [!INFO]</p>
+      <div id="input" class="markdown inline-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="input-label" spellcheck="false" data-placeholder="ここに入力。**強調** や # 見出しがその場で整形されます。"></div>
+      <p id="editor-state" role="status">入力中・未送信</p>
+      <p id="status" role="status"></p>
+      <div class="send-row"><span>Enter: 改行</span><button id="send" type="submit" class="primary">送信（疑似）</button></div>
+    </form>
+    <details><summary>保存形式の参考例（固定サンプル）</summary><p>現在の入力を保存した結果ではありません。本文内見出しの境界規則は未確定です。</p><pre id="source-example"></pre></details>
+  </main>
+</body>
+</html>
