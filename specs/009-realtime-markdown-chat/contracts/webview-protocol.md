@@ -26,6 +26,15 @@ VS Code Extension Host と `chatView` Webview の間の内部 JSON 契約。Webv
 | `openSource` | `{ chatId }` | 対象 Markdown を VS Code の原文エディターで開く。 |
 | `refresh` | `{}` | 一覧と現在の thread を再読込。 |
 | `recoverDraft` | `{ draftId, action: "restore" \| "discard" }` | 復旧候補を明示的に復元または破棄する。競合は上書きしない。 |
+| `copyDraft` | `{ draftId, revision }` | 指定 revision の下書きをクリップボードへコピーする。成功・失敗を `operationResult` で返す。下書きはコピー後も保持する。 |
+
+## 競合時の復旧操作
+
+- 競合・dirty・保存失敗時は、未送信 Markdown を維持したまま日本語の理由と「下書きをコピー」「原文を開く」「最新状態を再読み込み」を提示する。コピーは指定 revision の内容だけを対象とし、下書きを削除しない。
+- 再読み込み後も draft を復元候補として保持する。保存元 fingerprint が変わっている draft は自動適用せず、ユーザーに最新 thread と draft を確認させる。
+- 「再試行」は暗黙の自動 retry としない。ユーザーが明示的に送信を再操作した時点で Host が最新文書、対象 chat/section、dirty 状態、書込権限を再検証する。返信の再試行は最新 section 末尾への新規 message 追記に限り、既存 source を置換しない。対象 section が消失・曖昧なら再試行を拒否する。
+- 送信済み task の切替を競合後に再試行する場合も、Host が最新本文から message/task を一意に再特定し、対象 marker だけを更新できることを確認する。対象が消失・重複している場合は停止し、他の項目と draft を保持する。
+- ユーザーが下書きを破棄する操作を明示するまで、エラー表示の解除・snapshot 更新・再表示によって draft を削除してはならない。
 
 ## 入力検証・順序
 
