@@ -5,6 +5,7 @@ node_modules
 /media/chat.js
 *.map
 .vscode-test/
+test-results/
 *.vsix
 *.log
 .env*

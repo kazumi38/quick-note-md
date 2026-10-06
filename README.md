@@ -32,3 +32,14 @@ npm.cmd test
 ```
 
 `npm test` は Extension Host 上でテストを実行し、その前に TypeScript、Extension/Webview bundle、ESLint を検証します。手動シナリオと受入記録は [Task 009 quickstart](specs/009-realtime-markdown-chat/quickstart.md) と [受入テスト](specs/009-realtime-markdown-chat/acceptance-tests.md) を参照してください。
+
+### ローカル E2E テスト
+
+Windows では Playwright で実際の VS Code 上のチャット Webview を操作できます。初回実行時は VS Code 1.138.0 をダウンロードするため、ネットワーク接続が必要です。
+
+```powershell
+npm.cmd run test:e2e
+npm.cmd run test:e2e -- --grep "new chat"
+```
+
+各シナリオは一時ワークスペースと VS Code プロファイルを使用します。既存の `npm.cmd test` は従来どおり Extension Host テストのみを実行します。E2E の実行手順とトラブルシューティングは [E2E quickstart](specs/011-automated-test-scenarios/quickstart.md) を参照してください。
