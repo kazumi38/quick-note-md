@@ -56,13 +56,29 @@ suite('Extension commands', () => {
 		const views = extension.packageJSON.contributes.views['quick-note-md'].map((view: { id: string }) => view.id);
 		assert.deepStrictEqual(views, ['quick-note-md.chat']);
 		const commands = await vscode.commands.getCommands(true);
-		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.refresh']) {
+		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.newChat', 'quick-note-md.refresh']) {
 			assert.ok(commands.includes(name), name);
 		}
 		const contributedCommands = extension.packageJSON.contributes.commands.map((command: { command: string }) => command.command);
-		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.refresh']) {
+		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.newChat', 'quick-note-md.refresh']) {
 			assert.ok(contributedCommands.includes(name), name);
 		}
+		const target = vscode.commands as typeof vscode.commands & Record<string, unknown>;
+		const original = target.executeCommand;
+		const execute = original as (command: string, ...args: unknown[]) => Promise<unknown>;
+		const invoked: string[] = [];
+		target.executeCommand = (async (command: string, ...args: unknown[]) => {
+			invoked.push(command);
+			return execute.call(vscode.commands, command, ...args);
+		}) as typeof vscode.commands.executeCommand;
+		try {
+			await vscode.commands.executeCommand('quick-note-md.newChat');
+		} finally {
+			target.executeCommand = original;
+		}
+		assert.ok(invoked.includes('workbench.view.extension.quick-note-md'),
+			'new chat command reveals its view container before creating the draft');
+		assert.strictEqual((await store.list()).length, 0, 'starting a chat must not create a file before sending');
 	});
 
 	test('empty contexts require successful empty reads and clear on errors', async () => {

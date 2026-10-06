@@ -97,6 +97,12 @@ suite('Chat view host integration', () => {
 		try {
 			provider.resolveWebviewView({ webview } as unknown as vscode.WebviewView);
 			await waitFor(message => message.kind === 'snapshot' && message.state === 'empty');
+			await provider.startNewChat();
+			const commandDraft = await waitFor(message => message.kind === 'snapshot' &&
+				(message.activeDraft as Record<string, unknown> | undefined)?.sectionId === '本文');
+			assert.strictEqual(commandDraft.state, 'ready');
+			assert.strictEqual((commandDraft.activeDraft as Record<string, unknown>).markdown, '');
+			assert.strictEqual((await store.list()).length, 0, 'starting a draft must not create a chat file');
 			send({ kind: 'newChat' });
 			const firstDraft = await waitFor(message => message.kind === 'snapshot' &&
 				(message.activeDraft as Record<string, unknown> | undefined)?.sectionId === '本文');

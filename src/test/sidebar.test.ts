@@ -96,14 +96,19 @@ suite('Sidebar and settings', () => {
 		const extension = vscode.extensions.all.find(item => item.packageJSON.name === 'quick-note-md');
 		assert.ok(extension, 'QuickNoteMD extension is installed in the test host');
 		await extension.activate();
-		const views = extension.packageJSON.contributes.views['quick-note-md'].map((view: { id: string }) => view.id);
-		assert.deepStrictEqual(views, ['quick-note-md.chat']);
+		const views = extension.packageJSON.contributes.views['quick-note-md'];
+		assert.deepStrictEqual(views.map((view: { id: string }) => view.id), ['quick-note-md.chat']);
+		assert.strictEqual(views[0].type, 'webview');
 		assert.strictEqual(extension.packageJSON.contributes.menus['view/item/context'], undefined);
 		const welcome = extension.packageJSON.contributes.viewsWelcome;
 		assert.ok(welcome.some((item: { view: string; contents: string; when: string }) =>
-			item.view === 'quick-note-md.chat' && item.contents.includes('新しいチャット')));
+			item.view === 'quick-note-md.chat' && item.contents.includes('新しいチャット') &&
+			item.contents.includes('command:quick-note-md.newChat')));
+		assert.ok(extension.packageJSON.contributes.menus['view/title'].some(
+			(item: { command: string; when: string }) =>
+				item.command === 'quick-note-md.newChat' && item.when === 'view == quick-note-md.chat'));
 		const commands = await vscode.commands.getCommands(true);
-		for (const name of ['newMemo', 'appendMemo', 'openMemo', 'newTodo', 'completeTodo', 'reopenTodo',
+		for (const name of ['newMemo', 'appendMemo', 'openMemo', 'newTodo', 'newChat', 'completeTodo', 'reopenTodo',
 			'changeStatus', 'deleteTodo', 'showSource', 'showRendered', 'toggleView', 'refresh']) {
 			assert.ok(commands.includes(`quick-note-md.${name}`), name);
 		}
@@ -111,7 +116,7 @@ suite('Sidebar and settings', () => {
 		assert.strictEqual(extension.packageJSON.contributes.configuration.properties['quick-note-md.defaultView'].default,
 			'rendered');
 		for (const view of views) {
-			assert.ok(extension.packageJSON.activationEvents.includes(`onView:${view}`), `${view} activates the extension`);
+			assert.ok(extension.packageJSON.activationEvents.includes(`onView:${view.id}`), `${view.id} activates the extension`);
 		}
 	});
 

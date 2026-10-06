@@ -62,14 +62,15 @@
       "quick-note-md": [
         {
           "id": "quick-note-md.chat",
-          "name": "チャット"
+          "name": "チャット",
+          "type": "webview"
         }
       ]
     },
     "viewsWelcome": [
       {
         "view": "quick-note-md.chat",
-        "contents": "チャットはまだありません。サイドバーの「新しいチャット」から作成できます。"
+        "contents": "チャットはまだありません。[新しいチャットを始める](command:quick-note-md.newChat)"
       }
     ],
     "customEditors": [
@@ -168,10 +169,20 @@
         "command": "quick-note-md.refresh",
         "title": "QuickNoteMD: 一覧を更新",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "quick-note-md.newChat",
+        "title": "QuickNoteMD: 新しいチャット",
+        "icon": "$(add)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "quick-note-md.newChat",
+          "when": "view == quick-note-md.chat",
+          "group": "navigation@0"
+        },
         {
           "command": "quick-note-md.refresh",
           "when": "view == quick-note-md.chat",

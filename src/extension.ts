@@ -37,6 +37,13 @@ export function activate(context: vscode.ExtensionContext): void {
 			}
 		}));
 	};
+	context.subscriptions.push(vscode.commands.registerCommand('quick-note-md.newChat', async () => {
+		try {
+			await chatView.revealAndStartNewChat();
+		} catch (error) {
+			await vscode.window.showErrorMessage(error instanceof Error ? error.message : '新しいチャットを開始できませんでした。');
+		}
+	}));
 	const memoUri = (item?: unknown, requireManaged = true): vscode.Uri => {
 		const todo = todoRefFromNode(item);
 		const uri = item instanceof MemoNode ? item.uri : todo ? todo.uri
