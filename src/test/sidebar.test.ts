@@ -97,14 +97,11 @@ suite('Sidebar and settings', () => {
 		assert.ok(extension, 'QuickNoteMD extension is installed in the test host');
 		await extension.activate();
 		const views = extension.packageJSON.contributes.views['quick-note-md'].map((view: { id: string }) => view.id);
-		assert.deepStrictEqual(views, ['quick-note-md.sidebar', 'quick-note-md.memos', 'quick-note-md.todos']);
+		assert.deepStrictEqual(views, ['quick-note-md.chat']);
+		assert.strictEqual(extension.packageJSON.contributes.menus['view/item/context'], undefined);
 		const welcome = extension.packageJSON.contributes.viewsWelcome;
 		assert.ok(welcome.some((item: { view: string; contents: string; when: string }) =>
-			item.view === 'quick-note-md.memos' && item.contents.includes('quick-note-md.newMemo') &&
-			item.when === 'quick-note-md.memosEmpty'));
-		assert.ok(welcome.some((item: { view: string; contents: string; when: string }) =>
-			item.view === 'quick-note-md.todos' && item.contents.includes('quick-note-md.newTodo') &&
-			item.when === 'quick-note-md.todosEmpty'));
+			item.view === 'quick-note-md.chat' && item.contents.includes('新しいチャット')));
 		const commands = await vscode.commands.getCommands(true);
 		for (const name of ['newMemo', 'appendMemo', 'openMemo', 'newTodo', 'completeTodo', 'reopenTodo',
 			'changeStatus', 'deleteTodo', 'showSource', 'showRendered', 'toggleView', 'refresh']) {

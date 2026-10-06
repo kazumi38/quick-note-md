@@ -5,7 +5,7 @@ import { resolve } from 'path';
 import { runInNewContext } from 'vm';
 import { DocumentStore } from '../documents';
 import { NoteEditor } from '../editor';
-import { maxEditLength, renderNote, validateRenderedEdit } from '../rendering';
+import { maxEditLength, renderNote, renderSafeMarkdown, validateRenderedEdit } from '../rendering';
 
 suite('安全なレンダリングと本文の編集', () => {
 	test('見出し・強調・改行を変更せず UTF-16 本文だけ編集する', () => {
@@ -93,6 +93,14 @@ suite('安全なレンダリングと本文の編集', () => {
 			node.children?.forEach(visit);
 		};
 		nodes.forEach(visit);
+	});
+
+	test('chat preview HTML keeps raw HTML, links, and images inert', () => {
+		const html = renderSafeMarkdown('<script>alert(1)</script>\n\n[run](command:evil)\n\n![remote](https://example.invalid/a.png)');
+		assert.ok(!/<(?:script|img|a)\b|<[^>]+\s(?:href|src|onerror)=/i.test(html));
+		assert.ok(html.includes('&lt;script&gt;'));
+		assert.ok(html.includes('run'));
+		assert.ok(html.includes('画像: remote'));
 	});
 
 	test('範囲偽装・古い本文・構造を変える入力を拒否する', () => {
