@@ -148,6 +148,21 @@ export class ChatView implements vscode.WebviewViewProvider, vscode.Disposable {
 		});
 		void this.refresh();
 	}
+	async revealAndStartNewChat(): Promise<void> {
+		await vscode.commands.executeCommand('workbench.view.extension.quick-note-md');
+		if (this.view) { await this.refresh(); }
+		await this.startNewChat();
+	}
+
+	async startNewChat(): Promise<void> {
+		this.selectedChat = undefined;
+		this.activeDraft = {
+			schemaVersion: 1, draftId: randomBytes(16).toString('hex'),
+			target: { sectionId: '本文' }, title: '', markdown: '', baseFingerprint: null,
+			revision: 0, updatedAt: Date.now()
+		};
+		await this.publish(++this.generation);
+	}
 
 	private chatId(uri: vscode.Uri): string {
 		return createHash('sha256').update(uri.toString()).digest('hex').slice(0, 32);
@@ -328,13 +343,7 @@ export class ChatView implements vscode.WebviewViewProvider, vscode.Disposable {
 				await this.refresh();
 				return;
 			case 'newChat':
-				this.selectedChat = undefined;
-				this.activeDraft = {
-					schemaVersion: 1, draftId: randomBytes(16).toString('hex'),
-					target: { sectionId: '本文' }, title: '', markdown: '', baseFingerprint: null,
-					revision: 0, updatedAt: Date.now()
-				};
-				await this.publish(++this.generation);
+				await this.startNewChat();
 				return;
 			case 'selectChat': {
 				if (!this.chats.has(message.chatId)) { await this.refresh(); return; }
