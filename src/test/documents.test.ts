@@ -4,6 +4,7 @@ import { chmod, mkdtemp, realpath, symlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { DocumentStore } from '../documents';
+import { parseChatMarkdown } from '../chatMarkdown';
 
 // Feature 001 storage contract coverage: EOF append only, targeted line updates, and safe conflict handling.
 suite('DocumentStore integration', () => {
@@ -42,6 +43,35 @@ suite('DocumentStore integration', () => {
 		await store.createTodo('new');
 		assert.strictEqual(await readNormalized(vscode.Uri.joinPath(root, 'todo.md')), '- [ ] new\n');
 		assert.deepStrictEqual((await store.todos()).map(todo => todo.text).sort(), ['nested', 'new']);
+	});
+
+	test('chat creation uses unique filenames and appends replies without replacing existing Markdown', async () => {
+		const id = '52a9f08231de4f09bcabac71fc083071';
+		const first = await store.createChat('会話', '2026-10-04 07:30', '## 本文内の見出し', id);
+		const second = await store.createChat('会話', '2026-10-04 07:31', '別の会話', '11a62a887897493db8501b19dc0dfb44');
+		assert.notStrictEqual(first.toString(), second.toString());
+		const original = await readNormalized(first);
+		assert.ok(original.includes('<!-- quick-note-md:message ' + id + ':start -->'));
+		const opened = await store.readChat(first);
+		await store.appendChatMessage(first, '返信', '2026-10-04 07:42', 'reply', '21a62a887897493db8501b19dc0dfb44', opened.version);
+		const result = await readNormalized(first);
+		assert.ok(result.startsWith(original));
+		assert.ok(result.includes('## 本文内の見出し'));
+		assert.ok(result.includes('## 返信'));
+		assert.strictEqual(parseChatMarkdown(result).state, 'valid');
+	});
+
+	test('chat task toggles update only a current checkbox marker and reject stale documents', async () => {
+		const uri = vscode.Uri.joinPath(root, 'task-chat.md');
+		const message = '<!-- quick-note-md:message 52a9f08231de4f09bcabac71fc083071:start -->\n- [ ] keep text\n<!-- quick-note-md:message 52a9f08231de4f09bcabac71fc083071:end -->';
+		const original = `# tasks\n\n## 本文\n\n### 2026-10-04 07:30\n${message}\n`;
+		await write(uri, original);
+		const opened = await store.readChat(uri);
+		const task = parseChatMarkdown(opened.text).thread?.sections[0].messages[0].tasks[0];
+		assert.ok(task);
+		await store.toggleChatTask(uri, '52a9f08231de4f09bcabac71fc083071', task.id, true, opened.version);
+		assert.strictEqual(await readNormalized(uri), original.replace('- [ ] keep text', '- [x] keep text'));
+		await assert.rejects(store.toggleChatTask(uri, '52a9f08231de4f09bcabac71fc083071', task.id, false, opened.version));
 	});
 
 	test('ten concurrent appends serialize without losing content or CRLF', async () => {

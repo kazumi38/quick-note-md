@@ -54,7 +54,7 @@ suite('Extension commands', () => {
 		assert.ok(extension);
 		await extension.activate();
 		const views = extension.packageJSON.contributes.views['quick-note-md'].map((view: { id: string }) => view.id);
-		assert.deepStrictEqual(views, ['quick-note-md.sidebar', 'quick-note-md.memos', 'quick-note-md.todos']);
+		assert.deepStrictEqual(views, ['quick-note-md.chat']);
 		const commands = await vscode.commands.getCommands(true);
 		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.refresh']) {
 			assert.ok(commands.includes(name), name);

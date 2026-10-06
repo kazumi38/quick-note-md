@@ -21,7 +21,7 @@ VS Code Extension Host と `chatView` Webview の間の内部 JSON 契約。Webv
 | `selectChat` | `{ chatId }` | Host が snapshot 内の既知 ID を検索し選択する。 |
 | `newChat` | `{}` | 新規 composer を開く。ファイルは送信成功まで作らない。 |
 | `draftChanged` | `{ draftId, revision, chatId?, sectionId, title?, markdown }` | Markdown source のみ受信し、Host で長さ・識別子を検証して復旧 JSON を保存。描画用 HTML は受け取らない。 |
-| `send` | `{ operationId, draftId, revision, chatId?, sectionId, title?, markdown, baseFingerprint? }` | Host が最新文書・dirty・競合・readonly・section を再検査し、timestamp / message ID を生成して対象ファイルを作成・追記する。 |
+| `send` | `{ operationId, draftId, revision, chatId?, sectionId, title?, markdown, retryConflict? }` | Host が最新文書・dirty・競合・readonly・section を再検査し、timestamp / message ID を生成して対象ファイルを作成・追記する。競合時は通常送信を停止する。ユーザーが最新状態を確認して明示的な再送信を選んだ場合のみ `retryConflict: true` を受け付け、Host が改めて dirty・readonly・形式・版を検証して追記する。 |
 | `toggleTask` | `{ operationId, chatId, messageId, taskId, checked, documentVersion }` | Host が現文書を再解析し対象 marker を再特定、版・readonly・dirty・競合を検証し marker のみ変更する。 |
 | `openSource` | `{ chatId }` | 対象 Markdown を VS Code の原文エディターで開く。 |
 | `refresh` | `{}` | 一覧と現在の thread を再読込。 |
@@ -32,7 +32,7 @@ VS Code Extension Host と `chatView` Webview の間の内部 JSON 契約。Webv
 
 - 競合・dirty・保存失敗時は、未送信 Markdown を維持したまま日本語の理由と「下書きをコピー」「原文を開く」「最新状態を再読み込み」を提示する。コピーは指定 revision の内容だけを対象とし、下書きを削除しない。
 - 再読み込み後も draft を復元候補として保持する。保存元 fingerprint が変わっている draft は自動適用せず、ユーザーに最新 thread と draft を確認させる。
-- 「再試行」は暗黙の自動 retry としない。ユーザーが明示的に送信を再操作した時点で Host が最新文書、対象 chat/section、dirty 状態、書込権限を再検証する。返信の再試行は最新 section 末尾への新規 message 追記に限り、既存 source を置換しない。対象 section が消失・曖昧なら再試行を拒否する。
+- 「再試行」は暗黙の自動 retry としない。ユーザーが最新 thread を確認して「最新状態を確認して再送信」を選んだ場合のみ Host が最新文書、対象 chat/section、dirty 状態、書込権限を再検証する。返信の再試行は最新 section 末尾への新規 message 追記に限り、既存 source を置換しない。対象 section が消失・曖昧なら再試行を拒否する。
 - 送信済み task の切替を競合後に再試行する場合も、Host が最新本文から message/task を一意に再特定し、対象 marker だけを更新できることを確認する。対象が消失・重複している場合は停止し、他の項目と draft を保持する。
 - ユーザーが下書きを破棄する操作を明示するまで、エラー表示の解除・snapshot 更新・再表示によって draft を削除してはならない。
 

@@ -5,15 +5,18 @@ import { DocumentStore } from './documents';
 import { NoteEditor } from './editor';
 import { isCommentNode, MemoNode, Sidebar, todoRefFromNode, TodoNode } from './sidebar';
 import { SidebarView } from './sidebarView';
+import { ChatView } from './chatView';
 
 export function activate(context: vscode.ExtensionContext): void {
 	const store = new DocumentStore(notesRoot);
 	const sidebar = new Sidebar(store);
 	const editor = new NoteEditor(context, store);
 	const unifiedView = new SidebarView(context, store);
-	context.subscriptions.push(sidebar, unifiedView, vscode.window.registerWebviewViewProvider(
+	const chatView = new ChatView(context, store);
+	context.subscriptions.push(sidebar, unifiedView, chatView, vscode.window.registerWebviewViewProvider(
 		SidebarView.viewType, unifiedView, { webviewOptions: { retainContextWhenHidden: true } }), vscode.window.registerCustomEditorProvider(
-		NoteEditor.viewType, editor, { supportsMultipleEditorsPerDocument: true }));
+		NoteEditor.viewType, editor, { supportsMultipleEditorsPerDocument: true }),
+		vscode.window.registerWebviewViewProvider(ChatView.viewType, chatView, { webviewOptions: { retainContextWhenHidden: true } }));
 
 	// Feature 001 command contract: newMemo / openMemo / appendMemo / newTodo / completeTodo /
 	// reopenTodo / deleteTodo / showSource are all routed through the shared store + refresh flow.
@@ -28,6 +31,8 @@ export function activate(context: vscode.ExtensionContext): void {
 				if (name !== 'refresh') {
 					void unifiedView.refresh().catch(error =>
 						vscode.window.showErrorMessage(error instanceof Error ? error.message : '一覧を更新できませんでした。'));
+					void chatView.refresh().catch(error =>
+						vscode.window.showErrorMessage(error instanceof Error ? error.message : 'チャット一覧を更新できませんでした。'));
 				}
 			}
 		}));
@@ -159,6 +164,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	register('refresh', async () => {
 		await sidebar.refresh();
 		await unifiedView.refresh();
+		await chatView.refresh();
 	});
 
 	let watcher: vscode.FileSystemWatcher | undefined;
@@ -167,24 +173,30 @@ export function activate(context: vscode.ExtensionContext): void {
 		watcher = undefined;
 		try {
 			watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(notesRoot(), '**/*.[mM][dD]'));
-			watcher.onDidCreate(() => sidebar.schedule());
-			watcher.onDidChange(() => sidebar.schedule());
-			watcher.onDidDelete(() => sidebar.schedule());
+			watcher.onDidCreate(() => { sidebar.schedule(); void chatView.refresh(); });
+			watcher.onDidChange(() => { sidebar.schedule(); void chatView.refresh(); });
+			watcher.onDidDelete(() => { sidebar.schedule(); void chatView.refresh(); });
 		} catch { /* The empty workspace is explained in the sidebar. */ }
 		sidebar.schedule();
 		void unifiedView.refresh();
+		void chatView.refresh();
 	};
 	context.subscriptions.push(
 		{ dispose: () => watcher?.dispose() },
 		vscode.workspace.onDidChangeTextDocument(event => {
-			try { if (isManaged(event.document.uri)) { sidebar.schedule(); } } catch { /* No workspace. */ }
+			try {
+				if (isManaged(event.document.uri)) {
+					sidebar.schedule();
+					void chatView.refresh();
+				}
+			} catch { /* No workspace. */ }
 		}),
 		vscode.workspace.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('quick-note-md')) { watch(); }
 		}),
 		vscode.workspace.onDidChangeWorkspaceFolders(watch),
-		vscode.workspace.onDidRenameFiles(() => sidebar.schedule()),
-		vscode.workspace.onDidDeleteFiles(() => sidebar.schedule())
+		vscode.workspace.onDidRenameFiles(() => { sidebar.schedule(); void chatView.refresh(); }),
+		vscode.workspace.onDidDeleteFiles(() => { sidebar.schedule(); void chatView.refresh(); })
 	);
 	watch();
 }

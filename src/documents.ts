@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { posix, relative as pathRelative, isAbsolute as pathIsAbsolute } from 'path';
 import { lstat } from 'fs/promises';
 import { appendText, ParsedTodo, parseTodoComments, parseTodos, safeFileName, serializeComments, serializeTodoBody, serializeTodoMetadata, statusInfo, TodoStatus, validateInput } from './core';
+import { parseChatMarkdown, serializeChatMessage } from './chatMarkdown';
 
 export interface TodoRef extends ParsedTodo {
 	uri: vscode.Uri;
@@ -60,12 +61,15 @@ export class DocumentStore {
 	private async writable(uri: vscode.Uri): Promise<void> {
 		const stat = await this.guard(uri);
 		if (!stat || !(stat.type & vscode.FileType.File)) { throw new Error('Markdown ファイルが見つかりません。'); }
-		if (stat.permissions === vscode.FilePermission.Readonly || vscode.workspace.fs.isWritableFileSystem(uri.scheme) === false) {
+		if (await this.isReadOnly(uri, stat)) {
 			throw new Error('ファイルは読み取り専用です。');
 		}
-		if (uri.scheme === 'file' && ((await lstat(uri.fsPath)).mode & 0o222) === 0) {
-			throw new Error('ファイルは読み取り専用です。');
-		}
+	}
+
+	private async isReadOnly(uri: vscode.Uri, stat: vscode.FileStat): Promise<boolean> {
+		return stat.permissions === vscode.FilePermission.Readonly ||
+			vscode.workspace.fs.isWritableFileSystem(uri.scheme) === false ||
+			(uri.scheme === 'file' && ((await lstat(uri.fsPath)).mode & 0o222) === 0);
 	}
 
 	private async document(uri: vscode.Uri, allowDirty = false): Promise<vscode.TextDocument> {
@@ -102,6 +106,89 @@ export class DocumentStore {
 		};
 		await visit(root);
 		return files.sort((a, b) => b.mtime - a.mtime || a.uri.toString().localeCompare(b.uri.toString()));
+	}
+
+	async readChat(uri: vscode.Uri): Promise<{ text: string; version: number; dirty: boolean; readOnly: boolean }> {
+		const stat = await this.guard(uri);
+		if (!stat || !(stat.type & vscode.FileType.File) || !/\.md$/i.test(uri.path)) {
+			throw new Error('管理対象の Markdown チャットが見つかりません。');
+		}
+		const document = await vscode.workspace.openTextDocument(uri);
+		return {
+			text: document.getText(),
+			version: document.version,
+			dirty: document.isDirty,
+			readOnly: await this.isReadOnly(uri, stat)
+		};
+	}
+
+	async createChat(title: string, timestamp: string, body: string, id: string): Promise<vscode.Uri> {
+		if (!title.trim()) { throw new Error('チャットのタイトルを入力してください。'); }
+		if (!body.trim()) { throw new Error('本文を入力してください。'); }
+		validateInput(title);
+		const base = safeFileName(title).replace(/\.md$/i, '');
+		if (!base) { throw new Error('使用できるチャット名を入力してください。'); }
+		const message = serializeChatMessage(timestamp, body, id);
+		await this.ensureRoot();
+		for (let index = 0; index < 1000; index++) {
+			const uri = vscode.Uri.joinPath(this.getRoot(), `${base}${index ? `-${index + 1}` : ''}.md`);
+			const created = await this.serial(uri, async () => {
+				if (await this.guard(uri, true)) { return false; }
+				await this.create(uri, `# ${title}\n\n## 本文\n\n${message}\n`);
+				return true;
+			});
+			if (created) { return uri; }
+		}
+		throw new Error('同名のチャットが多すぎます。別のタイトルを指定してください。');
+	}
+
+	async appendChatMessage(
+		uri: vscode.Uri, sectionName: string, timestamp: string, body: string, id: string, expectedVersion: number
+	): Promise<number> {
+		if (!body.trim()) { throw new Error('本文を入力してください。'); }
+		const message = serializeChatMessage(timestamp, body, id);
+		return this.serial(uri, async () => {
+			const document = await this.document(uri);
+			if (document.version !== expectedVersion) { throw new Error('チャットが変更されました。最新状態を再読み込みしてください。'); }
+			const source = document.getText();
+			const parsed = parseChatMarkdown(source);
+			if (parsed.state !== 'valid' || !parsed.thread) {
+				throw new Error(parsed.issue ?? 'このチャット形式には安全に追記できません。');
+			}
+			const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+			const section = [...parsed.thread.sections].reverse().find(item => item.name === sectionName);
+			if (!section) {
+				const insertionAt = source.length;
+				const separator = source.endsWith(eol + eol) ? '' : source.endsWith(eol) ? eol : eol + eol;
+				const insertion = `${separator}## ${sectionName}${eol}${eol}${message}${eol}`;
+				return this.editNow(document, expectedVersion, insertionAt, insertionAt, '', insertion, false);
+			}
+			const insertionAt = section.sourceRange.end;
+			const beforeSection = source.slice(section.sourceRange.start, insertionAt);
+			const separator = beforeSection.endsWith(eol + eol) ? '' : beforeSection.endsWith(eol) ? eol : eol + eol;
+			const insertion = `${separator}${message}${eol}`;
+			return this.editNow(document, expectedVersion, insertionAt, insertionAt, '', insertion, false);
+		});
+	}
+
+	async toggleChatTask(uri: vscode.Uri, messageId: string, taskId: string, checked: boolean, expectedVersion: number): Promise<number> {
+		return this.serial(uri, async () => {
+			const document = await this.document(uri);
+			if (document.version !== expectedVersion) { throw new Error('チャットが変更されました。最新状態を再読み込みしてください。'); }
+			const parsed = parseChatMarkdown(document.getText());
+			if (parsed.state !== 'valid' || !parsed.thread) {
+				throw new Error(parsed.issue ?? 'このチャット形式ではチェック状態を変更できません。');
+			}
+			const message = parsed.thread.sections.flatMap(section => section.messages)
+				.find(candidate => candidate.id === messageId);
+			const task = message?.tasks.find(candidate => candidate.id === taskId);
+			if (!task || !['open', 'done'].includes(task.status) || task.checked === checked) {
+				throw new Error('対象のチェック項目が変更または削除されています。最新状態を再読み込みしてください。');
+			}
+			const start = task.start + 1;
+			const before = document.getText()[start];
+			return this.editNow(document, expectedVersion, start, start + 1, before, checked ? 'x' : ' ', false);
+		});
 	}
 
 	private async ensureRoot(): Promise<void> {

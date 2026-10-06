@@ -1,6 +1,9 @@
 out
+build/
 dist
 node_modules
+/media/chat.js
+*.map
 .vscode-test/
 *.vsix
 *.log

@@ -1,6 +1,6 @@
 # Task 009 クイックスタート・検証手順
 
-この資料は実装後の検証手順であり、現時点で本体機能が動作することを示すものではない。網羅的なケースは [受入テスト](acceptance-tests.md)、保存形式は [Markdown 契約](contracts/chat-markdown.md)、Webview 境界は [protocol](contracts/webview-protocol.md) を参照。
+チャット本体と自動テストは実装済みです。この手順は VS Code 上での手動受入確認に使います。自動テストの pass は IME、実レイアウト、性能測定などの手動受入を代替しません。網羅的なケースは [受入テスト](acceptance-tests.md)、保存形式は [Markdown 契約](contracts/chat-markdown.md)、Webview 境界は [protocol](contracts/webview-protocol.md) を参照。
 
 ## 前提
 
@@ -42,6 +42,8 @@ npm.cmd run lint
 8. 原文エディターを未保存のままにし、dirty 表示と send/toggle 停止を確認する。保存後に再試行する。
 9. 外部変更・読み取り専用・保存失敗を隔離 workspace で試し、下書きが保持され、成功表示されず、再読み込み後に結果が再現することを確認する。
 10. 幅280px、400px、800pxで長い日本語、長い URL、コード、表を確認する。パネル全体の横 overflow がなく、コード・表のスクロールはそれぞれの領域内に留まることを確認する。
+
+送信・チェック切替に失敗した場合は、下書きが保持され、画面に理由と「下書きをコピー」「原文を開く」「最新状態を再読み込み」が表示されます。競合下書きは自動適用されず、明示的に破棄するかコピーして原文を確認してください。
 
 ## 受入の判定
 

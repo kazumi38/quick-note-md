@@ -14,9 +14,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:quick-note-md.sidebar",
-    "onView:quick-note-md.memos",
-    "onView:quick-note-md.todos"
+    "onView:quick-note-md.chat"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -63,29 +61,15 @@
     "views": {
       "quick-note-md": [
         {
-          "id": "quick-note-md.sidebar",
-          "name": "Todo とメモ"
-        },
-        {
-          "id": "quick-note-md.memos",
-          "name": "メモ"
-        },
-        {
-          "id": "quick-note-md.todos",
-          "name": "Todo"
+          "id": "quick-note-md.chat",
+          "name": "チャット"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "quick-note-md.memos",
-        "contents": "管理対象の Markdown メモはありません。\n\n[新規メモを作成](command:quick-note-md.newMemo)",
-        "when": "quick-note-md.memosEmpty"
-      },
-      {
-        "view": "quick-note-md.todos",
-        "contents": "Todo はまだありません。\n\n[新規 Todo を作成](command:quick-note-md.newTodo)",
-        "when": "quick-note-md.todosEmpty"
+        "view": "quick-note-md.chat",
+        "contents": "チャットはまだありません。サイドバーの「新しいチャット」から作成できます。"
       }
     ],
     "customEditors": [
@@ -189,66 +173,9 @@
     "menus": {
       "view/title": [
         {
-          "command": "quick-note-md.newMemo",
-          "when": "view == quick-note-md.memos",
-          "group": "navigation@1"
-        },
-        {
-          "command": "quick-note-md.newTodo",
-          "when": "view == quick-note-md.todos",
-          "group": "navigation@1"
-        },
-        {
           "command": "quick-note-md.refresh",
-          "when": "view == quick-note-md.memos || view == quick-note-md.todos",
-          "group": "navigation@2"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "quick-note-md.appendMemo",
-          "when": "view == quick-note-md.memos && viewItem == memo",
-          "group": "inline@1"
-        },
-        {
-          "command": "quick-note-md.completeTodo",
-          "when": "view == quick-note-md.todos && viewItem == activeTodo",
-          "group": "inline@1"
-        },
-        {
-          "command": "quick-note-md.reopenTodo",
-          "when": "view == quick-note-md.todos && viewItem == doneTodo",
-          "group": "inline@1"
-        },
-        {
-          "command": "quick-note-md.changeStatus",
-          "when": "view == quick-note-md.todos && (viewItem == activeTodo || viewItem == doneTodo)",
-          "group": "inline@2"
-        },
-        {
-          "command": "quick-note-md.addTodoComment",
-          "when": "view == quick-note-md.todos && (viewItem == activeTodo || viewItem == doneTodo)",
-          "group": "inline@3"
-        },
-        {
-          "command": "quick-note-md.editTodoComment",
-          "when": "view == quick-note-md.todos && viewItem == todoComment",
-          "group": "inline@1"
-        },
-        {
-          "command": "quick-note-md.editTodoMetadata",
-          "when": "view == quick-note-md.todos && (viewItem == activeTodo || viewItem == doneTodo)",
-          "group": "inline@4"
-        },
-        {
-          "command": "quick-note-md.deleteTodo",
-          "when": "view == quick-note-md.todos && (viewItem == activeTodo || viewItem == doneTodo)",
-          "group": "2_edit@1"
-        },
-        {
-          "command": "quick-note-md.showSource",
-          "when": "viewItem == memo || viewItem == activeTodo || viewItem == doneTodo || viewItem == unknownTodo",
-          "group": "1_open@1"
+          "when": "view == quick-note-md.chat",
+          "group": "navigation@1"
         }
       ],
       "editor/title": [
@@ -263,6 +190,7 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "webpack",
+    "compile:webview": "webpack --config-name chat-webview",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
     "compile-tests": "tsc -p . --outDir out",
@@ -290,6 +218,16 @@
     "serialize-javascript": "^7.0.6"
   },
   "dependencies": {
-    "markdown-it": "^14.3.2"
+    "markdown-it": "^14.3.2",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-history": "^1.5.1",
+    "prosemirror-inputrules": "^1.5.1",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-markdown": "^1.13.8",
+    "prosemirror-model": "^1.25.12",
+    "prosemirror-schema-list": "^1.5.1",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-tables": "^1.8.5",
+    "prosemirror-view": "^1.42.6"
   }
 }
