@@ -1,13 +1,27 @@
 import * as vscode from 'vscode';
 import { posix, relative as pathRelative, isAbsolute as pathIsAbsolute } from 'path';
 import { lstat } from 'fs/promises';
-import { appendText, ParsedTodo, parseTodoComments, parseTodos, safeFileName, serializeComments, serializeTodoBody, serializeTodoMetadata, statusInfo, TodoStatus, validateInput } from './core';
+import { appendText, normalizeLabels, ParsedMemoExtension, ParsedTodo, parseMemoExtension, parseTodoComments, parseTodos, safeFileName, serializeComments, serializeMemoBody, serializeMemoExtension, serializeTodoBody, serializeTodoMetadata, statusInfo, TodoStatus, validateInput } from './core';
 import { parseChatMarkdown, serializeChatMessage } from './chatMarkdown';
 
 export interface TodoRef extends ParsedTodo {
 	uri: vscode.Uri;
 	version: number;
 	comments?: ReturnType<typeof parseTodoComments>;
+}
+
+export interface MemoComment {
+	id: string;
+	order: number;
+	bodyMarkdown: string;
+}
+
+export interface MemoRef extends Omit<ParsedMemoExtension, 'comments'> {
+	uri: vscode.Uri;
+	version: number;
+	title: string;
+	sourceText: string;
+	comments: MemoComment[];
 }
 
 function missing(error: unknown): boolean {
@@ -106,6 +120,123 @@ export class DocumentStore {
 		};
 		await visit(root);
 		return files.sort((a, b) => b.mtime - a.mtime || a.uri.toString().localeCompare(b.uri.toString()));
+	}
+
+	async memos(): Promise<MemoRef[]> {
+		const files = await this.list();
+		const result: MemoRef[] = [];
+		const todoUri = vscode.Uri.joinPath(this.getRoot(), 'todo.md').toString();
+		for (const file of files) {
+			if (file.uri.toString() === todoUri) { continue; }
+			await this.guard(file.uri);
+			const document = await vscode.workspace.openTextDocument(file.uri);
+			const sourceText = document.getText();
+			const chat = parseChatMarkdown(sourceText).thread;
+			if (chat?.sections.some(section => section.messages.length > 0)) { continue; }
+			const parsed = parseMemoExtension(sourceText);
+			result.push({
+				...parsed,
+				uri: file.uri,
+				version: document.version,
+				title: file.title,
+				sourceText,
+				comments: parsed.comments.map((bodyMarkdown, order) => ({ id: `memo-comment-${order}`, order, bodyMarkdown })),
+			});
+		}
+		return result;
+	}
+
+	private async memoDocument(ref: MemoRef): Promise<vscode.TextDocument> {
+		const document = await this.document(ref.uri);
+		if (document.version !== ref.version || document.getText() !== ref.sourceText) {
+			throw new Error('メモが変更されました。一覧を更新して再実行してください。');
+		}
+		const parsed = parseMemoExtension(document.getText());
+		if (parsed.readOnly) { throw new Error(parsed.warning ?? 'メモの拡張ブロックを安全に編集できません。'); }
+		return document;
+	}
+
+	async createMemoWithBody(title: string, bodyMarkdown: string): Promise<vscode.Uri> {
+		validateInput(title);
+		const base = safeFileName(title).replace(/\.md$/i, '');
+		if (!base) { throw new Error('使用できるファイル名を入力してください。'); }
+		await this.ensureRoot();
+		for (let index = 0; index < 1000; index++) {
+			const uri = vscode.Uri.joinPath(this.getRoot(), `${base}${index ? `-${index + 1}` : ''}.md`);
+			const created = await this.serial(uri, async () => {
+				if (await this.guard(uri, true)) { return false; }
+				await this.create(uri, serializeMemoBody(bodyMarkdown));
+				return true;
+			});
+			if (created) { return uri; }
+		}
+		throw new Error('同名のメモが多すぎます。別の名前を指定してください。');
+	}
+
+	async editMemoBody(ref: MemoRef, bodyMarkdown: string): Promise<number> {
+		return this.serial(ref.uri, async () => {
+			const document = await this.memoDocument(ref);
+			const parsed = parseMemoExtension(document.getText());
+			const start = 0;
+			const end = parsed.descriptionStoredLength;
+			const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+			return this.editNow(document, ref.version, start, end, document.getText().slice(start, end),
+				serializeMemoBody(bodyMarkdown, eol), false);
+		});
+	}
+
+	private async updateMemoExtension(ref: MemoRef, labels: readonly string[], comments: readonly string[]): Promise<number> {
+		return this.serial(ref.uri, async () => {
+			const document = await this.memoDocument(ref);
+			const source = document.getText();
+			const parsed = parseMemoExtension(source);
+			const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+			const updated = labels.length || comments.length
+				? serializeMemoExtension(parsed.descriptionMarkdown, labels, comments, eol)
+				: serializeMemoBody(parsed.descriptionMarkdown, eol);
+			return this.editNow(document, ref.version, 0, source.length, source, updated, false);
+		});
+	}
+
+	async setMemoLabels(ref: MemoRef, labels: readonly string[]): Promise<number> {
+		const normalized = labels.map(label => label.trim());
+		if (normalized.some(label => !label) || new Set(normalized).size !== normalized.length) {
+			throw new Error('ラベル名は空白のみや同一表記の重複を避けてください。');
+		}
+		return this.updateMemoExtension(ref, normalizeLabels(normalized), ref.comments.map(comment => comment.bodyMarkdown));
+	}
+
+	async addMemoComment(ref: MemoRef, text: string): Promise<number> {
+		if (!text.trim()) { throw new Error('コメントを入力してください。'); }
+		return this.updateMemoExtension(ref, ref.labels, [...ref.comments.map(comment => comment.bodyMarkdown), text]);
+	}
+
+	async editMemoComment(ref: MemoRef, commentId: string, text: string): Promise<number> {
+		if (!text.trim()) { throw new Error('コメントを入力してください。'); }
+		const index = ref.comments.findIndex(comment => comment.id === commentId);
+		if (index < 0) { throw new Error('コメントが見つかりません。'); }
+		const comments = ref.comments.map((comment, ordinal) => ordinal === index ? text : comment.bodyMarkdown);
+		return this.updateMemoExtension(ref, ref.labels, comments);
+	}
+
+	async deleteMemoComment(ref: MemoRef, commentId: string): Promise<number> {
+		if (!ref.comments.some(comment => comment.id === commentId)) { throw new Error('コメントが見つかりません。'); }
+		const comments = ref.comments.filter(comment => comment.id !== commentId).map(comment => comment.bodyMarkdown);
+		return this.updateMemoExtension(ref, ref.labels, comments);
+	}
+
+	async renameMemo(ref: MemoRef, title: string): Promise<vscode.Uri> {
+		validateInput(title);
+		const base = safeFileName(title).replace(/\.md$/i, '');
+		if (!base) { throw new Error('使用できるファイル名を入力してください。'); }
+		return this.serial(ref.uri, async () => {
+			const document = await this.memoDocument(ref);
+			const target = vscode.Uri.joinPath(ref.uri.with({ path: ref.uri.path.slice(0, ref.uri.path.lastIndexOf('/')) }), `${base}.md`);
+			if (target.toString() === ref.uri.toString()) { return ref.uri; }
+			if (await this.guard(target, true)) { throw new Error('同じ名前のメモが既にあります。別のタイトルを指定してください。'); }
+			await vscode.workspace.fs.rename(document.uri, target, { overwrite: false });
+			return target;
+		});
 	}
 
 	async readChat(uri: vscode.Uri): Promise<{ text: string; version: number; dirty: boolean; readOnly: boolean }> {
@@ -251,6 +382,31 @@ export class DocumentStore {
 		});
 	}
 
+	async createTodoWithBody(text: string, bodyMarkdown: string): Promise<string> {
+		validateInput(text);
+		await this.ensureRoot();
+		const uri = vscode.Uri.joinPath(this.getRoot(), 'todo.md');
+		await this.serial(uri, async () => {
+			if (!await this.guard(uri, true)) {
+				const eol = '\n';
+				await this.create(uri, `- [ ] ${text}${eol}${bodyMarkdown.trim()
+					? `${serializeTodoBody(bodyMarkdown, eol)}${eol}` : ''}`);
+				return;
+			}
+			const document = await this.document(uri);
+			const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+			const source = document.getText();
+			const row = `- [ ] ${text}`;
+			const suffix = `${appendText(source, row, eol)}${bodyMarkdown.trim()
+				? `${serializeTodoBody(bodyMarkdown, eol)}${eol}` : ''}`;
+			await this.editNow(document, document.version, source.length, source.length, '', suffix, false);
+		});
+		const matches = (await this.todos()).filter(todo => todo.uri.toString() === uri.toString() && todo.text === text);
+		const created = matches[matches.length - 1];
+		if (!created) { throw new Error('作成した Todo を一覧から特定できませんでした。'); }
+		return `${uri.toString()}::${created.line}`;
+	}
+
 	async append(uri: vscode.Uri, text: string): Promise<void> {
 		validateInput(text);
 		return this.serial(uri, () => this.appendNow(uri, text));
@@ -364,9 +520,24 @@ export class DocumentStore {
 				const end = document.offsetAt(new vscode.Position(endLine + 1, 0));
 				return this.editNow(document, ref.version, start, end, document.getText().slice(start, end), serializeTodoBody(text, eol, indent) + eol, false);
 			}
+
 			const insertAt = document.offsetAt(new vscode.Position(bodyLine, 0));
 			const prefix = insertAt === document.getText().length && !document.getText().endsWith('\n') ? eol : '';
 			return this.editNow(document, ref.version, insertAt, insertAt, '', prefix + serializeTodoBody(text, eol, indent) + eol, false);
+		});
+	}
+
+	async editTodoTitle(ref: TodoRef, title: string): Promise<number> {
+		validateInput(title);
+		return this.serial(ref.uri, async () => {
+			const document = await this.todoDocument(ref);
+			const close = ref.markerStart + 2;
+			const prefix = ref.raw.slice(0, close + 1);
+			const spacing = /^[ \t]*/.exec(ref.raw.slice(close + 1))?.[0] || ' ';
+			const replacement = `${prefix}${spacing}${title}`;
+			const line = document.lineAt(ref.line);
+			return this.editNow(document, ref.version, document.offsetAt(line.range.start), document.offsetAt(line.range.end),
+				ref.raw, replacement, false);
 		});
 	}
 

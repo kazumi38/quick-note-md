@@ -50,4 +50,27 @@ const chatConfig = {
   devtool: 'nosources-source-map'
 };
 
-module.exports = [extensionConfig, chatConfig];
+const issueComposerConfig = {
+  name: 'issue-composer',
+  target: 'web',
+  mode: 'none',
+  entry: './src/webview/issueComposer.ts',
+  output: {
+    path: path.resolve(__dirname, 'media'),
+    filename: 'issueComposer.js'
+  },
+  resolve: { extensions: ['.ts', '.js'] },
+  module: {
+    rules: [{
+      test: /\.ts$/,
+      exclude: /node_modules/,
+      use: [{
+        loader: 'ts-loader',
+        options: { configFile: 'tsconfig.webview.json' }
+      }]
+    }]
+  },
+  devtool: 'nosources-source-map'
+};
+
+module.exports = [extensionConfig, chatConfig, issueComposerConfig];

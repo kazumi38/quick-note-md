@@ -2,12 +2,21 @@ import * as vscode from 'vscode';
 import { randomBytes } from 'crypto';
 import { statusInfo, statusOrder, TodoStatus } from './core';
 import { labelColor, labelPalette, setLabelColor } from './configuration';
-import { renderSafeMarkdown } from './rendering';
-import { DocumentStore, TodoRef } from './documents';
+import { maxEditLength, renderSafeMarkdown } from './rendering';
+import { DocumentStore, MemoRef, TodoRef } from './documents';
 import { DraftKind, DraftStore } from './drafts';
 import { DraftManager, ReconciledDraft } from './draftManager';
 
 interface DraftView { state: 'dirty' | 'conflict'; text?: string; labels?: string[]; dueDate?: string }
+
+function record(value: unknown): value is Record<string, unknown> {
+	return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+	const actual = Object.keys(value).sort();
+	return actual.length === keys.length && actual.every((key, index) => key === [...keys].sort()[index]);
+}
 
 export type DueState = 'overdue' | 'upcoming' | 'none';
 
@@ -28,6 +37,10 @@ export function computeDueState(dueDate: string | undefined, status: TodoStatus,
 /** Every message the webview can send; unknown/malformed shapes are ignored rather than trusted. */
 type SidebarMessage =
 	| { kind: 'ready' }
+	| { kind: 'startCreate'; itemKind: 'memo' | 'todo' }
+	| { kind: 'createIssue'; itemKind: 'memo' | 'todo'; title: string; bodyMarkdown: string; requestId: string }
+	| { kind: 'saveIssue'; itemId: string; field: 'title' | 'body' | 'labels' | 'comment' | 'status'; value: string | string[]; commentId?: string; requestId: string }
+	| { kind: 'deleteIssueComment'; itemId: string; commentId: string; requestId: string }
 	| { kind: 'newMemo' }
 	| { kind: 'newTodo' }
 	| { kind: 'refresh' }
@@ -50,10 +63,13 @@ type SidebarMessage =
 	| { kind: 'setLabelColor'; label: string; color: string }
 	| { kind: 'discardOrphan'; backupKey: string };
 
-export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposable {
-	public static readonly viewType = 'quick-note-md.sidebar';
-	private view: vscode.WebviewView | undefined;
+export class SidebarView implements vscode.Disposable {
+	public static readonly viewType = 'quick-note-md.issue';
+	private panel: vscode.WebviewPanel | undefined;
+	private panelReady = false;
+	private pendingCreate: 'memo' | 'todo' | undefined;
 	private todos: TodoRef[] = [];
+	private memos: MemoRef[] = [];
 	private disposed = false;
 	private generation = 0;
 	private readonly drafts: DraftManager;
@@ -64,37 +80,70 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 		this.drafts = new DraftManager(this.draftStore);
 	}
 
-	resolveWebviewView(view: vscode.WebviewView): void {
-		this.view = view;
-		view.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')] };
-		view.webview.html = this.html(view.webview);
-		view.webview.onDidReceiveMessage(message => void this.message(message));
+	async reveal(): Promise<void> {
+		if (this.disposed) { throw new Error('メモと Todo の画面は利用できません。'); }
+		if (!this.panel) {
+			const panel = vscode.window.createWebviewPanel(
+				SidebarView.viewType,
+				'メモと Todo',
+				vscode.ViewColumn.One,
+				{
+					enableScripts: true,
+					retainContextWhenHidden: true,
+					localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
+				},
+			);
+			this.panel = panel;
+			this.panelReady = false;
+			panel.webview.html = this.html(panel.webview);
+			panel.webview.onDidReceiveMessage(message => void this.message(message));
+			panel.onDidDispose(() => {
+				if (this.panel === panel) {
+					this.panel = undefined;
+					this.panelReady = false;
+					this.pendingCreate = undefined;
+				}
+			});
+		}
+		this.panel.reveal(vscode.ViewColumn.One);
 		void this.refresh();
+	}
+
+	async revealAndStartCreate(itemKind: 'memo' | 'todo'): Promise<void> {
+		const waitingForWebview = !this.panel || !this.panelReady;
+		if (waitingForWebview) { this.pendingCreate = itemKind; }
+		await this.reveal();
+		if (!waitingForWebview) {
+			await this.panel?.webview.postMessage({ kind: 'openCreatePanel', itemKind });
+		}
 	}
 
 	async refresh(): Promise<void> {
 		if (this.disposed) { return; }
 		const generation = ++this.generation;
 		this.todos = [];
-		await this.view?.webview.postMessage({
-			kind: 'snapshot', state: 'loading', files: [], todos: [], orphans: [], labelPalette: [],
+		this.memos = [];
+		await this.panel?.webview.postMessage({
+			kind: 'snapshot', state: 'loading', files: [], todos: [], issues: [], orphans: [], labelPalette: [],
 		});
 		if (this.disposed || generation !== this.generation) { return; }
 		if (!vscode.workspace.workspaceFolders?.length) {
-			await this.view?.webview.postMessage({
+			await this.panel?.webview.postMessage({
 				kind: 'snapshot', state: 'unavailable', error: 'ワークスペース フォルダーを開いてください。',
-				files: [], todos: [], orphans: [], labelPalette: [...labelPalette],
+				files: [], todos: [], issues: [], orphans: [], labelPalette: [...labelPalette],
 			});
 			return;
 		}
 
-		const [todoResult, fileResult] = await Promise.allSettled([this.store.todos(), this.store.list()]);
+		const [todoResult, fileResult, memoResult] = await Promise.allSettled([this.store.todos(), this.store.list(), this.store.memos()]);
 		if (this.disposed || generation !== this.generation) { return; }
 		this.todos = todoResult.status === 'fulfilled' ? todoResult.value : [];
+		this.memos = memoResult.status === 'fulfilled' ? memoResult.value : [];
 		const files = fileResult.status === 'fulfilled' ? fileResult.value : [];
 		const errors = [
 			...(todoResult.status === 'rejected' ? [todoResult.reason] : []),
 			...(fileResult.status === 'rejected' ? [fileResult.reason] : []),
+			...(memoResult.status === 'rejected' ? [memoResult.reason] : []),
 		];
 		const error = errors.map(reason => reason instanceof Error ? reason.message : '一覧を読み込めませんでした。').join('\n');
 		let reconciled: ReconciledDraft[] = [];
@@ -114,7 +163,7 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 				state: entry.state, text: entry.snapshot.text, labels: entry.snapshot.labels, dueDate: entry.snapshot.dueDate,
 			});
 		}
-		const viewState = errors.length ? 'error' : files.length || this.todos.length ? 'ready' : 'empty';
+		const viewState = errors.length ? 'error' : files.length || this.todos.length || this.memos.length ? 'ready' : 'empty';
 		const displayFiles = new Map(files.map(file => [file.uri.toString(), file]));
 		for (const todo of this.todos) {
 			const uri = todo.uri.toString();
@@ -149,14 +198,59 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 					newReplyDraft: draftsById.get(`${id}::reply::`),
 				};
 			}),
+			issues: [
+				...this.memos.map(memo => ({
+					id: this.memoId(memo), selectionKey: this.memoId(memo), kind: 'memo', fileTitle: memo.title, title: memo.title,
+					bodyMarkdown: memo.descriptionMarkdown, bodyHtml: renderSafeMarkdown(memo.descriptionMarkdown),
+					labels: memo.labels.map(name => ({ name, color: labelColor(name) })),
+					comments: memo.comments.map(comment => ({
+						id: comment.id, text: comment.bodyMarkdown, html: renderSafeMarkdown(comment.bodyMarkdown),
+					})),
+					readOnly: memo.readOnly, warning: memo.warning, version: memo.version,
+				})),
+				...this.todos.map(todo => ({
+					id: this.id(todo), selectionKey: `${todo.uri.toString()}::${todo.line}`,
+					kind: 'todo', fileTitle: todo.uri.path.split('/').pop()?.replace(/\.md$/i, '') ?? '',
+					title: todo.text, status: todo.status, statusLabel: statusInfo[todo.status].label,
+					bodyMarkdown: todo.bodyMarkdown ?? '', bodyHtml: todo.bodyMarkdown ? renderSafeMarkdown(todo.bodyMarkdown) : '',
+					labels: (todo.labels ?? []).map(name => ({ name, color: labelColor(name) })),
+					comments: (todo.comments?.comments ?? []).map(comment => ({
+						id: comment.id, text: comment.bodyMarkdown, html: renderSafeMarkdown(comment.bodyMarkdown),
+					})),
+					readOnly: Boolean(todo.readOnly) || todo.status === 'unknown', warning: todo.warning, version: todo.version,
+				})),
+			],
 			orphans,
 		};
 		if (this.disposed || generation !== this.generation) { return; }
-		await this.view?.webview.postMessage({ kind: 'snapshot', ...snapshot });
+		await this.panel?.webview.postMessage({ kind: 'snapshot', ...snapshot });
 	}
 
 	private id(todo: TodoRef): string {
 		return `${todo.uri.toString()}::${todo.line}::${todo.raw}`;
+	}
+
+	private memoId(memo: MemoRef): string { return `${memo.uri.toString()}::memo`; }
+
+	private findMemo(id: unknown): MemoRef | undefined {
+		return typeof id === 'string' && id.length <= 4096 ? this.memos.find(candidate => this.memoId(candidate) === id) : undefined;
+	}
+
+	private async issueOperation(requestId: string, action: () => Promise<unknown>): Promise<void> {
+		try {
+			const result = await action();
+			await this.panel?.webview.postMessage({
+				kind: 'issueResult', requestId, success: true,
+				selectionKey: typeof result === 'string' ? result : undefined,
+			});
+		} catch (error) {
+			await this.panel?.webview.postMessage({
+				kind: 'issueResult', requestId, success: false,
+				error: error instanceof Error ? error.message : '操作を完了できませんでした。',
+			});
+		} finally {
+			await this.refresh();
+		}
 	}
 
 	private find(id: unknown): TodoRef | undefined {
@@ -178,7 +272,7 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 	private async finishDraftAction(field: DraftKind, todo: TodoRef, action: 'save' | 'discard',
 		operation: () => Promise<unknown>, replyId?: string): Promise<void> {
 		const success = await this.notify(operation);
-		await this.view?.webview.postMessage({ kind: 'draftResult', field, id: this.id(todo), replyId, action, success });
+		await this.panel?.webview.postMessage({ kind: 'draftResult', field, id: this.id(todo), replyId, action, success });
 	}
 
 	private async changeDraft(todo: TodoRef, kind: DraftKind,
@@ -191,9 +285,100 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 	}
 
 	private async message(value: unknown): Promise<void> {
-		if (!value || typeof value !== 'object' || Array.isArray(value)) { return; }
+		if (!record(value)) { return; }
 		const message = value as SidebarMessage;
-		if (message.kind === 'ready') { await this.refresh(); return; }
+		if (message.kind === 'createIssue') {
+			if (!exactKeys(value, ['kind', 'itemKind', 'title', 'bodyMarkdown', 'requestId']) ||
+				!['memo', 'todo'].includes(String(value.itemKind)) || typeof value.title !== 'string' ||
+				value.title.length > 220 || typeof value.bodyMarkdown !== 'string' || value.bodyMarkdown.length > maxEditLength ||
+				typeof value.requestId !== 'string' || !/^[\w-]{1,100}$/.test(value.requestId)) { return; }
+			await this.issueOperation(value.requestId, async () => value.itemKind === 'memo'
+				? `${(await this.store.createMemoWithBody(value.title as string, value.bodyMarkdown as string)).toString()}::memo`
+				: this.store.createTodoWithBody(value.title as string, value.bodyMarkdown as string));
+			return;
+		}
+		if (message.kind === 'saveIssue') {
+			const keys = Object.keys(value).sort();
+			const allowed = ['commentId', 'field', 'itemId', 'kind', 'requestId', 'value'];
+			if (keys.some(key => !allowed.includes(key)) || !['kind', 'field', 'itemId', 'requestId', 'value'].every(key => keys.includes(key)) ||
+				typeof value.itemId !== 'string' || value.itemId.length > 4096 ||
+				typeof value.requestId !== 'string' || !/^[\w-]{1,100}$/.test(value.requestId) ||
+				typeof value.field !== 'string' || !['title', 'body', 'labels', 'comment', 'status'].includes(value.field) ||
+				(typeof value.value !== 'string' && !Array.isArray(value.value)) ||
+				(typeof value.value === 'string' && value.value.length > maxEditLength) ||
+				(Array.isArray(value.value) && (value.value.length > 100 || value.value.some(label => typeof label !== 'string' || label.length > 256))) ||
+				(value.commentId !== undefined && (typeof value.commentId !== 'string' || value.commentId.length > 200))) { return; }
+			const memo = this.findMemo(value.itemId);
+			const todo = this.find(value.itemId);
+			if (!memo && !todo) { return; }
+			await this.issueOperation(value.requestId, async () => {
+				const issueLabels = (): string[] => {
+					if (!Array.isArray(value.value) || !value.value.every(label => typeof label === 'string')) {
+						throw new Error('ラベルの形式が不正です。');
+					}
+					const labels = value.value.map(label => label.trim());
+					if (labels.some(label => !label) || new Set(labels).size !== labels.length) {
+						throw new Error('ラベルは空欄にできず、同じ名前を重複して登録できません。');
+					}
+					return labels;
+				};
+				if (memo) {
+					if (value.field === 'title' && typeof value.value === 'string') {
+						return `${(await this.store.renameMemo(memo, value.value)).toString()}::memo`;
+					}
+					if (value.field === 'body' && typeof value.value === 'string') { await this.store.editMemoBody(memo, value.value); return; }
+					if (value.field === 'labels') {
+						await this.store.setMemoLabels(memo, issueLabels()); return;
+					}
+					if (value.field === 'comment' && typeof value.value === 'string') {
+						if (typeof value.commentId === 'string') { await this.store.editMemoComment(memo, value.commentId, value.value); }
+						else { await this.store.addMemoComment(memo, value.value); }
+						return;
+					}
+					throw new Error('メモでは利用できない操作です。');
+				}
+				if (!todo) { throw new Error('対象のTodoが見つかりません。'); }
+				if (value.field === 'title' && typeof value.value === 'string') { await this.store.editTodoTitle(todo, value.value); return; }
+				if (value.field === 'body' && typeof value.value === 'string') { await this.store.editTodoBody(todo, value.value); return; }
+				if (value.field === 'labels') {
+					await this.store.setTodoMetadata(todo, issueLabels(), todo.dueDate); return;
+				}
+				if (value.field === 'comment' && typeof value.value === 'string') {
+					if (typeof value.commentId === 'string') { await this.store.editTodoComment(todo, value.commentId, value.value); }
+					else { await this.store.addTodoComment(todo, value.value); }
+					return;
+				}
+				if (value.field === 'status' && typeof value.value === 'string' &&
+					statusOrder.includes(value.value as TodoStatus) && value.value !== 'unknown') {
+					await this.store.setStatus(todo, value.value as Exclude<TodoStatus, 'unknown'>); return;
+				}
+				throw new Error('Todoでは利用できない操作です。');
+			});
+			return;
+		}
+		if (message.kind === 'deleteIssueComment') {
+			if (!exactKeys(value, ['kind', 'itemId', 'commentId', 'requestId']) ||
+				typeof value.itemId !== 'string' || value.itemId.length > 4096 ||
+				typeof value.commentId !== 'string' || value.commentId.length > 200 ||
+				typeof value.requestId !== 'string' || !/^[\w-]{1,100}$/.test(value.requestId)) { return; }
+			const memo = this.findMemo(value.itemId);
+			const todo = this.find(value.itemId);
+			if (!memo && !todo) { return; }
+			await this.issueOperation(value.requestId, async () => {
+				if (memo) { await this.store.deleteMemoComment(memo, value.commentId as string); }
+				else if (todo) { await this.store.deleteTodoComment(todo, value.commentId as string); }
+			});
+			return;
+		}
+		if (message.kind === 'ready') {
+			this.panelReady = true;
+			await this.refresh();
+			if (this.pendingCreate) {
+				await this.panel?.webview.postMessage({ kind: 'openCreatePanel', itemKind: this.pendingCreate });
+				this.pendingCreate = undefined;
+			}
+			return;
+		}
 		if (message.kind === 'newMemo' || message.kind === 'newTodo') {
 			await vscode.commands.executeCommand(`quick-note-md.${message.kind}`);
 			return;
@@ -223,7 +408,7 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 		}
 		if ((message.kind === 'draftBody' || message.kind === 'previewBody') && typeof message.text === 'string') {
 			if (message.kind === 'draftBody') { await this.changeDraft(todo, 'body', { text: message.text }); }
-			await this.view?.webview.postMessage({ kind: 'preview', field: 'body', id: this.id(todo), text: message.text, html: renderSafeMarkdown(message.text) });
+			await this.panel?.webview.postMessage({ kind: 'preview', field: 'body', id: this.id(todo), text: message.text, html: renderSafeMarkdown(message.text) });
 			return;
 		}
 		if (message.kind === 'saveBody' && typeof message.text === 'string') {
@@ -252,7 +437,7 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 		}
 		if ((message.kind === 'draftReply' || message.kind === 'previewReply') && typeof message.text === 'string') {
 			if (message.kind === 'draftReply') { await this.changeDraft(todo, 'reply', { text: message.text }, message.replyId); }
-			await this.view?.webview.postMessage({ kind: 'preview', field: 'reply', id: this.id(todo), replyId: message.replyId, text: message.text, html: renderSafeMarkdown(message.text) });
+			await this.panel?.webview.postMessage({ kind: 'preview', field: 'reply', id: this.id(todo), replyId: message.replyId, text: message.text, html: renderSafeMarkdown(message.text) });
 			return;
 		}
 		if (message.kind === 'saveReply' && typeof message.text === 'string') {
@@ -296,11 +481,15 @@ export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposabl
 		const nonce = randomBytes(16).toString('hex');
 		const script = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'sidebar.js'));
 		const style = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'sidebar.css'));
-		return `<!doctype html><html lang="ja"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';"><link rel="stylesheet" href="${style}"></head><body><main id="app" aria-label="QuickNoteMD サイドバー"></main><script nonce="${nonce}" src="${script}"></script></body></html>`;
+		const composerScript = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'issueComposer.js'));
+		const issueStyle = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'issue.css'));
+		return `<!doctype html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';"><link rel="stylesheet" href="${style}"><link rel="stylesheet" href="${issueStyle}"></head><body class="issue-ui"><main id="app" aria-label="QuickNoteMD メモと Todo"></main><script nonce="${nonce}" src="${composerScript}"></script><script nonce="${nonce}" src="${script}"></script></body></html>`;
 	}
 
 	dispose(): void {
 		this.disposed = true;
-		this.view = undefined;
+		this.panel?.dispose();
+		this.panel = undefined;
+		this.panelReady = false;
 	}
 }

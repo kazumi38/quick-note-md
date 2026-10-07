@@ -56,11 +56,13 @@ suite('Extension commands', () => {
 		const views = extension.packageJSON.contributes.views['quick-note-md'].map((view: { id: string }) => view.id);
 		assert.deepStrictEqual(views, ['quick-note-md.chat']);
 		const commands = await vscode.commands.getCommands(true);
-		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.newChat', 'quick-note-md.refresh']) {
+		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.newChat',
+			'quick-note-md.openIssues', 'quick-note-md.refresh']) {
 			assert.ok(commands.includes(name), name);
 		}
 		const contributedCommands = extension.packageJSON.contributes.commands.map((command: { command: string }) => command.command);
-		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.newChat', 'quick-note-md.refresh']) {
+		for (const name of ['quick-note-md.newMemo', 'quick-note-md.newTodo', 'quick-note-md.newChat',
+			'quick-note-md.openIssues', 'quick-note-md.refresh']) {
 			assert.ok(contributedCommands.includes(name), name);
 		}
 		const target = vscode.commands as typeof vscode.commands & Record<string, unknown>;
@@ -110,10 +112,23 @@ suite('Extension commands', () => {
 		}
 	});
 
-	test('newMemo creates unique managed files and appendMemo writes only to the selected note', async () => {
-		queueInput('日本語メモ', '日本語メモ', '追記');
+	test('newMemo and newTodo open the full issue composer without prompting', async () => {
+		let inputCalls = 0;
+		const errors: string[] = [];
+		patchWindow('showInputBox', (async () => { inputCalls++; return 'unexpected'; }) as typeof vscode.window.showInputBox);
+		patchWindow('showErrorMessage', (async (message: string) => { errors.push(message); }) as typeof vscode.window.showErrorMessage);
 		await vscode.commands.executeCommand('quick-note-md.newMemo');
-		await vscode.commands.executeCommand('quick-note-md.newMemo');
+		await vscode.commands.executeCommand('quick-note-md.newTodo');
+		assert.strictEqual(inputCalls, 0);
+		assert.deepStrictEqual(errors, []);
+		assert.deepStrictEqual(await store.list(), []);
+		assert.deepStrictEqual(await store.todos(), []);
+	});
+
+	test('appendMemo writes only to the selected note', async () => {
+		await store.createMemo('日本語メモ');
+		await store.createMemo('日本語メモ');
+		queueInput('追記');
 		const memos = await store.list();
 		const files = memos.map(item => item.uri.path.split('/').pop()).sort();
 		assert.deepStrictEqual(files, ['日本語メモ-2.md', '日本語メモ.md']);
@@ -126,7 +141,7 @@ suite('Extension commands', () => {
 
 	test('newTodo, status changes, delete, and showSource follow the command contract', async () => {
 		const errors: string[] = [];
-		queueInput('確認タスク');
+		await store.createTodo('確認タスク');
 		patchWindow('showWarningMessage', (async () => '削除') as typeof vscode.window.showWarningMessage);
 		patchWindow('showErrorMessage', (async (message: string) => { errors.push(message); }) as typeof vscode.window.showErrorMessage);
 		await vscode.commands.executeCommand('quick-note-md.newTodo');

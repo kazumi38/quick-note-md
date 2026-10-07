@@ -1,7 +1,7 @@
 # QuickNoteMD
 
-QuickNoteMD は VS Code のサイドバーで Markdown チャットを作成・閲覧する拡張機能です。
-会話はワークスペース内の通常の `.md` ファイルとして保存され、拡張機能を使わずに読み書きできます。
+QuickNoteMD は VS Code で Markdown チャットを扱い、メモと Todo を GitHub Issue 風の画面で管理する拡張機能です。
+会話・メモ・Todo はワークスペース内の通常の `.md` ファイルとして保存されます。Issue 風 UI の操作は[画像付き手順書](specs/012-github-issue-ui/user-guide.md)を参照してください。
 
 ## 使い方
 
