@@ -45,6 +45,100 @@ suite('DocumentStore integration', () => {
 		assert.deepStrictEqual((await store.todos()).map(todo => todo.text).sort(), ['nested', 'new']);
 	});
 
+	test('Issue memo description and extension updates preserve exact body and CRLF', async () => {
+		const source = '# Title\r\n\r\nkeep **Markdown**\r\n';
+		const uri = await store.createMemoWithBody('issue memo', source);
+		let memo = (await store.memos()).find(candidate => candidate.uri.toString() === uri.toString())!;
+		assert.strictEqual(memo.descriptionMarkdown, source);
+		await store.setMemoLabels(memo, [' bug ', '日本語']);
+		memo = (await store.memos()).find(candidate => candidate.uri.toString() === uri.toString())!;
+		assert.deepStrictEqual(memo.labels, ['bug', '日本語']);
+		await store.addMemoComment(memo, 'first\r\n- [ ] not a Todo');
+		memo = (await store.memos()).find(candidate => candidate.uri.toString() === uri.toString())!;
+		await store.addMemoComment(memo, 'second');
+		memo = (await store.memos()).find(candidate => candidate.uri.toString() === uri.toString())!;
+		assert.deepStrictEqual(memo.comments.map(comment => comment.bodyMarkdown), ['first\n- [ ] not a Todo', 'second']);
+		await store.editMemoBody(memo, '# New description\nline two');
+		memo = (await store.memos()).find(candidate => candidate.uri.toString() === uri.toString())!;
+		assert.strictEqual(memo.descriptionMarkdown.replace(/\r\n/g, '\n'), '# New description\nline two');
+		assert.deepStrictEqual(memo.labels, ['bug', '日本語']);
+		assert.deepStrictEqual(memo.comments.map(comment => comment.bodyMarkdown), ['first\n- [ ] not a Todo', 'second']);
+		assert.ok((await read(uri)).includes('\r\n<!-- quick-note-md:issue -->'));
+		assert.strictEqual((await store.todos()).length, 0);
+	});
+
+	test('Memo checklists stay out of the Todo list when its last label is removed', async () => {
+		const body = '- [ ] first\n- [x] second';
+		const uri = await store.createMemoWithBody('checklist memo', body);
+		let memo = (await store.memos()).find(candidate => candidate.uri.toString() === uri.toString())!;
+		assert.strictEqual(memo.descriptionMarkdown.replace(/\r\n/g, '\n'), body);
+		assert.deepStrictEqual((await store.todos()).filter(todo => todo.uri.toString() === uri.toString()), []);
+		await store.editMemoBody(memo, '- [ ] edited\n- [x] again');
+		memo = (await store.memos()).find(candidate => candidate.uri.toString() === uri.toString())!;
+		assert.strictEqual(memo.descriptionMarkdown.replace(/\r\n/g, '\n'), '- [ ] edited\n- [x] again');
+		await store.setMemoLabels(memo, ['keep']);
+		memo = (await store.memos()).find(candidate => candidate.uri.toString() === uri.toString())!;
+		assert.strictEqual(memo.descriptionMarkdown.replace(/\r\n/g, '\n'), '- [ ] edited\n- [x] again');
+		await store.setMemoLabels(memo, []);
+		memo = (await store.memos()).find(candidate => candidate.uri.toString() === uri.toString())!;
+		assert.strictEqual(memo.descriptionMarkdown.replace(/\r\n/g, '\n'), '- [ ] edited\n- [x] again');
+		assert.deepStrictEqual((await store.todos()).filter(todo => todo.uri.toString() === uri.toString()), []);
+	});
+
+	test('Memo listing excludes the Todo store and chat transcripts', async () => {
+		const memo = await store.createMemo('regular memo');
+		await store.createTodo('managed task');
+		await store.createChat('conversation', '2024-01-02 03:04', 'chat message', '0123456789abcdef0123456789abcdef');
+		assert.deepStrictEqual((await store.memos()).map(item => item.uri.toString()), [memo.toString()]);
+	});
+
+	test('Issue memo comment edits and deletion affect only the selected footer comment', async () => {
+		const uri = await store.createMemoWithBody('comments', 'legacy\n');
+		let memo = (await store.memos())[0];
+		await store.addMemoComment(memo, 'first');
+		memo = (await store.memos())[0];
+		await store.addMemoComment(memo, 'second');
+		memo = (await store.memos())[0];
+		await store.editMemoComment(memo, memo.comments[0].id, 'changed');
+		memo = (await store.memos())[0];
+		assert.deepStrictEqual(memo.comments.map(comment => comment.bodyMarkdown), ['changed', 'second']);
+		await store.deleteMemoComment(memo, memo.comments[0].id);
+		memo = (await store.memos())[0];
+		assert.deepStrictEqual(memo.comments.map(comment => comment.bodyMarkdown), ['second']);
+		assert.strictEqual(memo.descriptionMarkdown.replace(/\r\n/g, '\n'), 'legacy\n');
+	});
+
+	test('Memo rename is guarded and leaves Markdown body untouched', async () => {
+		const uri = await store.createMemoWithBody('before', '# Kept\n');
+		const memo = (await store.memos())[0];
+		await store.renameMemo(memo, 'after');
+		const renamed = (await store.memos())[0];
+		assert.strictEqual(renamed.title, 'after');
+		assert.strictEqual(renamed.descriptionMarkdown.replace(/\r\n/g, '\n'), '# Kept\n');
+		assert.ok(renamed.uri.toString().endsWith('/after.md'));
+		await assert.rejects(store.renameMemo(renamed, ''));
+		const occupied = await store.createMemo('occupied');
+		await assert.rejects(store.renameMemo(renamed, 'occupied'));
+		assert.strictEqual(await readNormalized(occupied), '# occupied\n');
+	});
+
+	test('Issue Todo creation stores title and optional Markdown body once, and title editing touches only its row', async () => {
+		await store.createTodoWithBody('first', '# Context\n\n- body bullet');
+		const [first] = await store.todos();
+		assert.strictEqual(first.text, 'first');
+		assert.strictEqual(first.bodyMarkdown, '# Context\n\n- body bullet');
+		await store.createTodoWithBody('sibling', '');
+		const todos = await store.todos();
+		await store.editTodoTitle(todos[0], '**renamed**');
+		const [renamed, sibling] = await store.todos();
+		assert.strictEqual(renamed.text, '**renamed**');
+		assert.strictEqual(renamed.bodyMarkdown, '# Context\n\n- body bullet');
+		assert.strictEqual(sibling.text, 'sibling');
+		assert.strictEqual(renamed.status, 'open');
+		assert.strictEqual((await readNormalized(vscode.Uri.joinPath(root, 'todo.md'))).match(/^- \[ \]/gm)?.length, 2);
+		await assert.rejects(store.editTodoTitle(renamed, ''));
+	});
+
 	test('chat creation uses unique filenames and appends replies without replacing existing Markdown', async () => {
 		const id = '52a9f08231de4f09bcabac71fc083071';
 		const first = await store.createChat('会話', '2026-10-04 07:30', '## 本文内の見出し', id);

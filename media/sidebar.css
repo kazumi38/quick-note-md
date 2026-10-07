@@ -1,5 +1,6 @@
 :root { color-scheme: light dark; }
-body { padding: 8px; font-family: var(--vscode-font-family); color: var(--vscode-foreground); font-size: 13px; }
+body { padding: 20px 28px; font-family: var(--vscode-font-family); color: var(--vscode-foreground); font-size: 13px; }
+#app { max-width: 1440px; margin: 0 auto; }
 button { color: inherit; background: var(--vscode-button-secondaryBackground); border: 1px solid transparent; padding: 3px 8px; cursor: pointer; border-radius: 2px; }
 button:hover { background: var(--vscode-button-secondaryHoverBackground); }
 button.danger { background: var(--vscode-inputValidation-errorBackground); border-color: var(--vscode-inputValidation-errorBorder); }
@@ -14,6 +15,60 @@ p.preview-label { font-size: 0.85em; opacity: 0.75; }
 .empty-state, .load-error { padding: 8px; border: 1px solid var(--vscode-panel-border); border-radius: 2px; }
 .load-error { border-color: var(--vscode-inputValidation-errorBorder); }
 .empty-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+.issue-workspace { min-height: calc(100vh - 40px); }
+.issue-appbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 0 0 14px; margin: 0 0 22px; border-bottom: 1px solid var(--vscode-panel-border); }
+.issue-breadcrumb { display: flex; align-items: center; gap: 8px; margin-right: auto; font-size: 14px; }
+.issue-breadcrumb span { color: var(--vscode-descriptionForeground); }
+.issue-selector { max-width: min(360px, 40vw); }
+.issue-appbar .issue-actions { flex-shrink: 0; }
+.issue-detail { max-width: 1100px; margin: 0 auto; padding: 8px 12px 32px; }
+.issue-empty { max-width: 1100px; margin: 64px auto; padding: 32px; text-align: center; border: 1px solid var(--vscode-panel-border); border-radius: 8px; }
+.issue-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--vscode-panel-border); }
+.issue-heading > div { min-width: 0; flex: 1; }
+.issue-title-row h1 { font-size: clamp(22px, 3vw, 32px); font-weight: 400; line-height: 1.25; margin: 0 0 8px; overflow-wrap: anywhere; }
+.issue-list-item { display: flex; flex-direction: column; width: 100%; text-align: left; background: transparent; border: 0; border-left: 2px solid transparent; padding: 7px 6px; margin: 2px 0; }
+.issue-list-item.selected { border-left-color: var(--vscode-focusBorder); background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+.issue-kind, .issue-context { color: var(--vscode-descriptionForeground); font-size: .85em; }
+.issue-list-title { overflow-wrap: anywhere; }
+.issue-toolbar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.issue-toolbar [role="separator"] { border-left: 1px solid var(--vscode-panel-border); align-self: stretch; margin: 0 2px; }
+.issue-card { position: relative; border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 0 12px 10px; margin: 12px 0 20px; min-width: 0; }
+.issue-card > header, .issue-title-row, .issue-label-row { display: flex; align-items: center; gap: 6px; }
+.issue-card > header { margin: 0 -12px 6px; padding: 9px 12px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-sideBar-background); }
+.issue-card > header > :first-child, .issue-title-row > :first-child { flex: 1; min-width: 0; }
+.issue-menu { margin-left: auto; }
+.issue-label-row { flex-wrap: wrap; }
+.issue-status-row { display: flex; align-items: center; gap: 8px; margin: 16px 0 20px; min-height: 32px; }
+.issue-status-row select { width: auto; max-width: 220px; border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 5px 10px; font-weight: 600; }
+.issue-timeline { max-width: 1000px; }
+.issue-create-panel { border: 1px solid var(--vscode-focusBorder); padding: 8px; margin: 8px 0; }
+.issue-create-panel:not(.wide) { position: fixed; top: 0; right: 0; bottom: 0; z-index: 2; width: min(55vw, 640px); overflow: auto; background: var(--vscode-sideBar-background); box-shadow: 0 0 0 100vmax rgb(0 0 0 / .2); }
+.issue-create-panel.wide { position: fixed; inset: 0; z-index: 2; overflow: auto; background: var(--vscode-sideBar-background); }
+.issue-create-panel label { display: block; margin: 10px 0 4px; }
+.issue-editor { min-height: 100px; border: 1px solid var(--vscode-input-border); padding: 6px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); }
+.issue-editor:focus { outline: 1px solid var(--vscode-focusBorder); }
+.issue-menu[aria-expanded="true"], .issue-toolbar button[aria-pressed="true"] { outline: 1px solid var(--vscode-focusBorder); }
+.issue-menu-wrap { position: relative; }
+.issue-menu-popover { position: absolute; right: 0; top: 100%; z-index: 1; min-width: 150px; padding: 4px; background: var(--vscode-menu-background); border: 1px solid var(--vscode-menu-border); box-shadow: 0 2px 6px var(--vscode-widget-shadow); }
+.issue-menu-popover button { display: block; width: 100%; text-align: left; background: transparent; }
+.issue-label-row { min-height: 28px; }
+.issue-label-editor { border: 1px solid var(--vscode-panel-border); padding: 6px; }
+.issue-label-editor .label-chip { display: inline-flex; align-items: center; gap: 4px; }
+.issue-label-editor .label-chip button { padding: 0 3px; background: transparent; }
+.issue-context { margin: 4px 0; color: var(--vscode-descriptionForeground); }
+.issue-comments { margin-top: 22px; }
+.issue-comments > h2 { font-size: 17px; margin: 8px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--vscode-panel-border); }
+.issue-new-comment { border-color: var(--vscode-focusBorder); }
+.issue-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 480px) {
+  body { padding: 12px; }
+  .issue-appbar { align-items: stretch; }
+  .issue-breadcrumb { width: 100%; }
+  .issue-selector { max-width: 100%; flex: 1; }
+  .issue-detail { padding: 8px 0 0; }
+  .issue-create-panel { position: fixed; inset: 0; z-index: 2; overflow: auto; background: var(--vscode-sideBar-background); }
+}
 
 .orphans { border: 1px solid var(--vscode-inputValidation-warningBorder); background: var(--vscode-inputValidation-warningBackground); padding: 6px; margin-bottom: 8px; }
 .orphan { display: flex; gap: 6px; align-items: flex-start; margin: 4px 0; }

@@ -115,8 +115,22 @@ export function parseTodos(text: string): ParsedTodo[] {
 	const linkedLines = new Set<number>();
 	const excluded = new Set<number>();
 	let inComment = false;
+	let inMemoExtension = false;
+	let inMemoBody = false;
 	for (let line = 0; line < lines.length; line++) {
 		const trimmed = lines[line].trim();
+		if (trimmed === memoBodyStart) { inMemoBody = true; }
+		if (inMemoBody) {
+			excluded.add(line);
+			if (trimmed === memoBodyEnd) { inMemoBody = false; }
+			continue;
+		}
+		if (trimmed === memoIssueStart) { inMemoExtension = true; }
+		if (inMemoExtension) {
+			excluded.add(line);
+			if (trimmed === memoIssueEnd) { inMemoExtension = false; }
+			continue;
+		}
 		if (trimmed === bodyStart || trimmed === '<!-- quick-note-md:comments -->' || trimmed === '<!-- quick-note-md:comment -->') {
 			inComment = true;
 			excluded.add(line);
@@ -181,6 +195,10 @@ const commentsStart = '<!-- quick-note-md:comments -->';
 const commentStart = '<!-- quick-note-md:comment -->';
 const commentEnd = '<!-- quick-note-md:end-comment -->';
 const commentsEnd = '<!-- quick-note-md:end-comments -->';
+const memoIssueStart = '<!-- quick-note-md:issue -->';
+const memoIssueEnd = '<!-- quick-note-md:end-issue -->';
+const memoBodyStart = '<!-- quick-note-md:issue-body -->';
+const memoBodyEnd = '<!-- quick-note-md:end-issue-body -->';
 const metadataPattern = /^<!--\s*quick-note-md:meta(?:\s+labels="([^"]*)")?(?:\s+due="([^"]*)")?\s*-->$/;
 const bodyStart = '<!-- quick-note-md:body -->';
 const bodyEnd = '<!-- quick-note-md:end-body -->';
@@ -265,6 +283,146 @@ export function serializeComments(comments: readonly string[], eol = '\n', inden
 		...comments.flatMap(body => [`${indent}${commentStart}`, ...body.replace(/\r\n|\r|\n/g, '\n').split('\n').map(line => `${indent}${line}`), `${indent}${commentEnd}`]),
 		`${indent}${commentsEnd}`,
 	].join(eol);
+}
+
+export interface ParsedMemoExtension {
+	descriptionMarkdown: string;
+	descriptionStoredLength: number;
+	labels: string[];
+	comments: string[];
+	readOnly: boolean;
+	warning?: string;
+}
+
+function unwrapMemoBody(source: string): { recognized: boolean; descriptionMarkdown: string } {
+	if (!source.startsWith(memoBodyStart)) { return { recognized: false, descriptionMarkdown: source }; }
+	const match = new RegExp(`^${memoBodyStart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\r\\n|\\n)([\\s\\S]*)\\1${memoBodyEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\1)?$`).exec(source);
+	return match
+		? { recognized: true, descriptionMarkdown: match[2] }
+		: { recognized: true, descriptionMarkdown: source };
+}
+
+function invalidMemoExtension(source: string): ParsedMemoExtension {
+	return {
+		descriptionMarkdown: source, descriptionStoredLength: source.length, labels: [], comments: [], readOnly: true,
+		warning: 'メモのラベル・コメント境界を認識できないため、読み取り専用です。',
+	};
+}
+
+/** Reads only a complete QuickNoteMD issue extension at the end of a Memo. */
+export function parseMemoExtension(source: string): ParsedMemoExtension {
+	const lines = source.split(/\r\n|\n|\r/);
+	const lastMatchingLine = (predicate: (line: string, index: number) => boolean, before = lines.length): number => {
+		for (let index = Math.min(before, lines.length) - 1; index >= 0; index--) {
+			if (predicate(lines[index], index)) { return index; }
+		}
+		return -1;
+	};
+	let endLine = lines.length - 1;
+	while (endLine >= 0 && !lines[endLine].trim()) { endLine--; }
+	if (endLine < 0 || lines[endLine].trim() !== memoIssueEnd) {
+		const issueStartLine = lastMatchingLine(line => line.trim() === memoIssueStart);
+		if (issueStartLine >= 0 && lines.slice(issueStartLine + 1).some(line =>
+			[commentsStart, commentStart, commentsEnd, commentEnd].includes(line.trim()))) {
+			return invalidMemoExtension(source);
+		}
+		const body = unwrapMemoBody(source);
+		if (body.recognized && body.descriptionMarkdown === source) {
+			return invalidMemoExtension(source);
+		}
+		return {
+			descriptionMarkdown: body.descriptionMarkdown, descriptionStoredLength: source.length,
+			labels: [], comments: [], readOnly: false,
+		};
+	}
+
+	const startLine = lastMatchingLine(line => line.trim() === memoIssueStart, endLine);
+	if (startLine < 0) { return invalidMemoExtension(source); }
+	const lineStarts = lineOffsets(source);
+	const extensionOffset = lineStarts[startLine];
+	const eol = (['\r\n', '\n'] as const).find(candidate =>
+		source.slice(extensionOffset - (2 * candidate.length), extensionOffset) === candidate + candidate);
+	if (!eol) {
+		return invalidMemoExtension(source);
+	}
+	const descriptionEnd = extensionOffset - (2 * eol.length);
+
+	const content = lines.slice(startLine + 1, endLine);
+	let cursor = 0;
+	let labels: string[] = [];
+	if (content[cursor]?.trim().startsWith('<!-- quick-note-md:meta')) {
+		const match = /^<!--\s*quick-note-md:meta(?:\s+labels="([^"]*)")?\s*-->$/.exec(content[cursor].trim());
+		if (!match) { return invalidMemoExtension(source); }
+		labels = match[1] ? match[1].split(',').map(label => label.trim()) : [];
+		if (labels.some(label => !label) || new Set(labels).size !== labels.length ||
+			labels.some(label => /[,"\r\n\u0000]/.test(label))) { return invalidMemoExtension(source); }
+		cursor++;
+	}
+
+	const comments: string[] = [];
+	if (content[cursor]?.trim() === commentsStart) {
+		cursor++;
+		while (cursor < content.length && content[cursor].trim() !== commentsEnd) {
+			if (content[cursor].trim() !== commentStart) { return invalidMemoExtension(source); }
+			cursor++;
+			const body: string[] = [];
+			while (cursor < content.length && content[cursor].trim() !== commentEnd) {
+				if ([memoIssueStart, memoIssueEnd, commentsStart, commentsEnd, commentStart].includes(content[cursor].trim())) {
+					return invalidMemoExtension(source);
+				}
+				body.push(content[cursor++]);
+			}
+			if (cursor >= content.length || content[cursor].trim() !== commentEnd) { return invalidMemoExtension(source); }
+			comments.push(body.join('\n'));
+			cursor++;
+		}
+		if (cursor >= content.length || content[cursor].trim() !== commentsEnd) { return invalidMemoExtension(source); }
+		cursor++;
+	}
+	if (cursor !== content.length) { return invalidMemoExtension(source); }
+	const body = unwrapMemoBody(source.slice(0, descriptionEnd));
+	if (body.recognized && body.descriptionMarkdown === source.slice(0, descriptionEnd)) { return invalidMemoExtension(source); }
+	return {
+		descriptionMarkdown: body.descriptionMarkdown,
+		descriptionStoredLength: descriptionEnd,
+		labels,
+		comments,
+		readOnly: false,
+	};
+}
+
+/** Protects Markdown checklist items in Memo descriptions from being parsed as standalone Todos. */
+export function serializeMemoBody(descriptionMarkdown: string, eol = '\n'): string {
+	if (!['\n', '\r\n'].includes(eol)) { throw new Error('改行コードが不正です。'); }
+	if (!/^[ \t]*(?:[-+*]|\d+[.)])[ \t]*\[[^\]]*\]/m.test(descriptionMarkdown)) { return descriptionMarkdown; }
+	if (descriptionMarkdown.includes(memoBodyStart) || descriptionMarkdown.includes(memoBodyEnd)) {
+		throw new Error('メモ本文に予約済みの境界文字列を含めることはできません。');
+	}
+	return `${memoBodyStart}${eol}${descriptionMarkdown}${eol}${memoBodyEnd}`;
+}
+
+/** Serializes an optional Memo footer while preserving the description byte-for-byte. */
+export function serializeMemoExtension(
+	descriptionMarkdown: string, labels: readonly string[], comments: readonly string[], eol = '\n',
+): string {
+	if (!['\n', '\r\n'].includes(eol)) { throw new Error('改行コードが不正です。'); }
+	if (!labels.length && !comments.length) { return descriptionMarkdown; }
+	const safeDescription = serializeMemoBody(descriptionMarkdown, eol);
+	const normalized = labels.map(label => label.trim());
+	if (normalized.some(label => !label) || new Set(normalized).size !== normalized.length ||
+		normalized.some(label => /[,"\r\n\u0000]/.test(label))) {
+		throw new Error('ラベルは空白・重複・カンマ・引用符・改行を含まない一意の名前にしてください。');
+	}
+	if (comments.some(comment => !comment.trim() || /<!--\s*quick-note-md:(?:issue|end-issue|issue-body|end-issue-body|meta|comments|comment|end-comment|end-comments)\b/i.test(comment))) {
+		throw new Error('コメントが空か、拡張ブロックの境界文字列を含んでいます。');
+	}
+	const extension = [
+		memoIssueStart,
+		...(normalized.length ? [serializeTodoMetadata(normalized).trimEnd()] : []),
+		...(comments.length ? [serializeComments(comments).replace(/\n/g, eol)] : []),
+		memoIssueEnd,
+	].join(eol);
+	return `${safeDescription}${eol}${eol}${extension}${eol}`;
 }
 
 export function serializeTodoMetadata(labels: readonly string[] = [], dueDate?: string, eol = '\n', indent = ''): string {

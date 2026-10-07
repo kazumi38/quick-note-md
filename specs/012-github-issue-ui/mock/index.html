@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GitHub Issue風 UIモック — Quick Note</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #e6edf3;
+      background: #0d1117;
+      --canvas: #0d1117;
+      --panel: #161b22;
+      --panel-muted: #010409;
+      --border: #30363d;
+      --muted: #9198a1;
+      --link: #4493f8;
+      --green: #238636;
+      --green-hover: #2ea043;
+      --purple: #a371f7;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    button, input, textarea, select { font: inherit; }
+    button { color: inherit; cursor: pointer; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 2px solid #4493f8;
+      outline-offset: 2px;
+    }
+    .preview-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 12px max(20px, calc((100vw - 1100px) / 2));
+      background: #161b22;
+      border-bottom: 1px solid var(--border);
+    }
+    .preview-title { font-weight: 650; }
+    .preview-note { color: var(--muted); font-size: 12px; margin-left: 8px; }
+    .switcher { display: flex; gap: 6px; }
+    .switcher button, .button {
+      border: 1px solid var(--border);
+      background: #21262d;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-weight: 600;
+    }
+    .switcher button[aria-pressed="true"] { border-color: #4493f8; color: #79c0ff; }
+    .button:hover, .switcher button:hover { background: #30363d; }
+    .button-green {
+      background: var(--green);
+      border-color: #2ea043;
+      color: white;
+    }
+    .button-green:hover { background: var(--green-hover); }
+    .button-subtle { background: transparent; }
+    .button-danger { color: #ff7b72; }
+    #workspace { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 0; }
+    #workspace.panel-open { grid-template-columns: minmax(0, 1fr) minmax(390px, 42%); }
+    .page { min-width: 0; padding: 34px 24px 60px; }
+    .repo-path { color: var(--link); font-size: 14px; margin-bottom: 22px; }
+    .repo-path strong { font-weight: 600; }
+    .issue-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: clamp(22px, 3vw, 32px); font-weight: 400; line-height: 1.25; margin: 0 0 8px; }
+    .issue-number { color: var(--muted); }
+    .issue-meta { color: var(--muted); }
+    .issue-meta strong { color: #e6edf3; font-weight: 600; }
+    .issue-layout { padding-top: 24px; }
+    .timeline { min-width: 0; }
+    .open-banner {
+      display: flex;
+      width: fit-content;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 13px;
+      border: 1px solid #3fb950;
+      border-radius: 7px;
+      background: #1a7f3726;
+      color: #3fb950;
+      font-weight: 600;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    .issue-status-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .issue-status-row .open-banner { margin-bottom: 0; }
+    .label-list { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+    .label-chip { overflow-wrap: anywhere; }
+    .more-menu { position: relative; flex-shrink: 0; }
+    .more-menu summary {
+      list-style: none; cursor: pointer; border: 1px solid var(--border);
+      border-radius: 6px; padding: 3px 10px; font-size: 20px; background: var(--panel);
+    }
+    .more-menu summary::-webkit-details-marker { display: none; }
+    .more-menu summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+    .menu-items {
+      position: absolute; right: 0; top: calc(100% + 6px); z-index: 3;
+      width: 180px; padding: 6px; background: var(--panel);
+      border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px #0008;
+    }
+    .menu-items button {
+      display: block; width: 100%; border: 0; border-radius: 4px;
+      text-align: left; padding: 8px; background: transparent;
+    }
+    .menu-items button:hover { background: #30363d; }
+    .label-editor { padding: 16px; margin: -8px 0 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+    .label-editor h2 { font-size: 14px; margin: 0 0 12px; }
+    .label-edit-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .label-edit-row input { min-width: 0; }
+    .label-edit-row button { flex-shrink: 0; }
+    .label-editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    #label-error { color: #ff7b72; }
+    .open-banner.closed { border-color: #a371f7; background: #8957e526; color: #d2a8ff; }
+    .timeline-item { position: relative; padding-left: 42px; margin-bottom: 20px; }
+    .timeline-item::before {
+      content: "";
+      position: absolute;
+      left: 16px;
+      top: 39px;
+      bottom: -25px;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-item:last-of-type::before { display: none; }
+    .avatar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 32px;
+      height: 32px;
+      border: 1px solid #6e7681;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #f0a45d, #8b5cf6 56%, #388bfd);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .event-line { min-height: 32px; display: flex; align-items: center; color: var(--muted); }
+    .event-line strong { color: #e6edf3; margin-right: 4px; }
+    .event-line a { color: var(--link); text-decoration: none; }
+    .comment-card { border: 1px solid var(--border); border-radius: 7px; }
+    .comment-header { border-radius: 7px 7px 0 0; }
+    .comment-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .comment-header-actions { display: flex; align-items: center; gap: 10px; }
+    .inline-title-editor { margin-top: 12px; }
+    .comment-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 14px;
+      color: var(--muted);
+      background: #161b22;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .comment-header strong { color: #e6edf3; }
+    .comment-body { padding: 14px 16px; line-height: 1.65; }
+    .comment-body p { margin: 0 0 12px; }
+    .comment-body p:last-child { margin-bottom: 0; }
+    .comment-body ul { margin: 8px 0 0; padding-left: 22px; }
+    .comment-entry { padding: 16px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); }
+    .comment-entry textarea {
+      display: block;
+      width: 100%;
+      min-height: 100px;
+      resize: vertical;
+      color: #e6edf3;
+      background: var(--canvas);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .comment-entry textarea::placeholder, input::placeholder, .description::placeholder { color: #6e7681; }
+    .comment-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+    .hint { color: var(--muted); font-size: 12px; }
+    .sidebar { font-size: 12px; }
+    .side-section { padding: 0 0 18px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+    .side-title { display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 10px; }
+    .side-value { color: var(--muted); }
+    .label-chip {
+      display: inline-block;
+      background: #388bfd26;
+      color: #79c0ff;
+      border: 1px solid #388bfd66;
+      border-radius: 12px;
+      padding: 2px 9px;
+    }
+    .empty-side { color: var(--muted); }
+    .create-launch { margin-bottom: 20px; }
+    .side-panel {
+      min-width: 0;
+      height: calc(100vh - 57px);
+      position: sticky;
+      top: 0;
+      overflow-y: auto;
+      background: var(--panel-muted);
+      border-left: 1px solid var(--border);
+    }
+    .panel-titlebar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 650;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--panel-muted);
+    }
+    .close-panel { border: 0; padding: 0 4px; background: none; color: var(--muted); font-size: 21px; }
+    .form-content { padding: 17px 18px 16px; }
+    .field { margin-bottom: 18px; }
+    .field label { display: block; font-weight: 600; margin-bottom: 8px; }
+    .optional { color: var(--muted); font-weight: 400; }
+    input, .description {
+      width: 100%;
+      border: 1px solid #3d444d;
+      border-radius: 7px;
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 8px 12px;
+    }
+    .description { min-height: 225px; resize: vertical; line-height: 1.6; }
+    .editor-shell { border: 1px solid #3d444d; border-radius: 8px; overflow: hidden; }
+    .editor-toolbar {
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 2px;
+      padding: 4px 6px;
+      background: #161b22;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .tool {
+      min-width: 27px;
+      height: 27px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      text-align: center;
+      border-radius: 4px;
+      font-weight: 650;
+    }
+    .tool:hover { background: #30363d; color: #e6edf3; }
+    .tool svg { width: 16px; height: 16px; vertical-align: middle; }
+    select.tool { width: 49px; padding: 0 2px; cursor: pointer; }
+    .tool:disabled { opacity: .4; cursor: default; }
+    .toolbar-divider { height: 18px; border-left: 1px solid var(--border); margin: 0 5px; }
+    .editor-shell .description { border: 0; border-radius: 0; }
+    .panel-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 9px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+      background: #0d1117;
+      position: sticky;
+      bottom: 0;
+    }
+    .toast { position: fixed; right: 18px; bottom: 18px; z-index: 5; padding: 11px 16px; background: #1f6feb; border-radius: 7px; box-shadow: 0 4px 14px #0008; }
+    [hidden] { display: none !important; }
+    @media (max-width: 700px) {
+      #workspace.panel-open { display: block; }
+      #workspace.panel-open .page { display: none; }
+      .side-panel { height: calc(100vh - 57px); border-left: 0; }
+      .form-content { max-width: 720px; margin: 0 auto; }
+      .panel-actions { padding-left: max(18px, calc((100vw - 720px) / 2)); padding-right: max(18px, calc((100vw - 720px) / 2)); }
+      .page { padding: 24px 16px 40px; }
+      .issue-layout { grid-template-columns: 1fr; }
+      .sidebar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+      .issue-heading > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+      .preview-note { display: block; margin: 3px 0 0; }
+    }
+    @media (max-width: 460px) {
+      .preview-bar { padding: 10px 12px; }
+      .page { padding: 20px 12px 36px; }
+      .form-content { padding: 14px 14px 10px; }
+      .panel-actions { padding: 10px 12px; gap: 6px; }
+      .panel-actions .button { padding: 6px 8px; font-size: 12px; }
+      .description { min-height: 190px; }
+      .comment-footer { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header class="preview-bar">
+    <div>
+      <span class="preview-title">Quick Note · Issue風UIモック</span>
+      <span class="preview-note">見た目確認用 — 入力やコメントは保存されません</span>
+    </div>
+    <nav class="switcher" aria-label="画面を切り替える">
+      <button type="button" id="show-detail" aria-pressed="true">詳細画面</button>
+      <button type="button" id="show-create" aria-pressed="false">作成画面</button>
+    </nav>
+  </header>
+
+  <div id="workspace">
+  <main class="page" id="detail-page">
+    <button type="button" class="button create-launch" id="new-issue">＋ 新しい項目</button>
+    <div class="repo-path"><strong>Quick Note</strong> / メモ・Todo</div>
+    <header class="issue-heading">
+      <div>
+        <h1 id="issue-title">空状態から新しいチャットを開始できるようにする</h1>
+        <div class="issue-meta"><span class="issue-number">#21</span> を <strong>kazumi38</strong> が作成 · 6時間前</div>
+      </div>
+      <details class="more-menu" id="item-menu">
+        <summary aria-label="項目の操作">…</summary>
+        <div class="menu-items">
+          <button type="button" id="edit-title">タイトルを編集</button>
+        </div>
+      </details>
+    </header>
+    <form id="title-editor" class="inline-title-editor" hidden>
+      <label for="edited-title">タイトル</label>
+      <input id="edited-title" required>
+      <div class="label-editor-actions">
+        <button type="button" class="button" id="cancel-title">キャンセル</button>
+        <button type="submit" class="button button-green">保存</button>
+      </div>
+    </form>
+
+    <div class="issue-layout">
+      <section class="timeline" aria-label="項目の詳細とコメント">
+        <div class="issue-status-row">
+          <button type="button" class="open-banner" id="state-banner" aria-pressed="false"><span aria-hidden="true">●</span><span id="state-label">Open — 対応中</span></button>
+          <div class="label-list" id="label-list" aria-label="ラベル"></div>
+          <details class="more-menu" id="label-menu">
+            <summary aria-label="ラベルの操作">…</summary>
+            <div class="menu-items">
+              <button type="button" id="add-label">ラベルを追加</button>
+              <button type="button" id="edit-labels">ラベルを編集</button>
+            </div>
+          </details>
+        </div>
+        <form class="label-editor" id="label-editor" aria-labelledby="label-editor-title" hidden>
+          <h2 id="label-editor-title">ラベルを編集</h2>
+          <div id="label-edit-list"></div>
+          <label for="label-name">新しいラベル</label>
+          <div class="label-edit-row">
+            <input id="label-name" placeholder="例: IMP、SKIP、調査中">
+            <button class="button" id="append-label" type="button">追加</button>
+          </div>
+          <p class="hint">名前を変更するか「外す」で取り外せます。他の項目には影響しません。</p>
+          <p id="label-error" role="alert"></p>
+          <div class="label-editor-actions">
+            <button class="button" id="cancel-labels" type="button">キャンセル</button>
+            <button class="button button-green" type="submit">適用</button>
+          </div>
+        </form>
+        <article class="timeline-item">
+          <span class="avatar" aria-hidden="true">K</span>
+          <div class="comment-card">
+            <div class="comment-header"><span><strong>kazumi38</strong> が説明を追加</span><time>6時間前</time></div>
+            <div class="comment-body" id="issue-body">
+              <p>チャットがまだない状態の Chat view から、新しいチャットを始められるようにする。</p>
+              <p>空状態からすぐに作成を開始できる入口を用意し、初回利用時に操作に迷わないようにする。</p>
+              <ul><li>作成画面を開く</li><li>タイトルと説明を入力する</li><li>作成後は詳細で内容を確認する</li></ul>
+            </div>
+          </div>
+        </article>
+        <div class="timeline-item" id="history-event">
+          <span class="avatar" aria-hidden="true">K</span>
+          <div class="event-line"><strong>kazumi38</strong> がこの項目を作成しました · 6時間前</div>
+        </div>
+        <article class="timeline-item">
+          <span class="avatar" aria-hidden="true">K</span>
+          <div class="comment-card" id="sample-comment">
+            <div class="comment-header"><span><strong>kazumi38</strong> がコメント</span><time>2時間前</time></div>
+            <div class="comment-body">作成入口の確認ができました。次は入力欄と書式設定を調整します。</div>
+          </div>
+        </article>
+        <div id="added-comments"></div>
+        <form class="comment-entry" id="comment-form">
+          <label for="comment-text"><strong>コメントを追加</strong></label>
+          <div class="editor-shell">
+            <div class="editor-toolbar" aria-label="コメントの書式設定">
+              <button type="button" class="tool" data-mark="heading" data-for="comment-text" aria-label="見出し">H</button>
+              <button type="button" class="tool" data-mark="bold" data-for="comment-text" aria-label="太字"><strong>B</strong></button>
+              <button type="button" class="tool" data-mark="italic" data-for="comment-text" aria-label="斜体"><i>I</i></button>
+              <button type="button" class="tool" data-mark="quote" data-for="comment-text" aria-label="引用">❞</button>
+              <button type="button" class="tool" data-mark="code" data-for="comment-text" aria-label="コード">&lt;/&gt;</button>
+              <button type="button" class="tool" data-mark="link" data-for="comment-text" aria-label="リンク">↗</button>
+              <span class="toolbar-divider"></span>
+              <button type="button" class="tool" data-mark="ul" data-for="comment-text" aria-label="箇条書き">☷</button>
+              <button type="button" class="tool" data-mark="ol" data-for="comment-text" aria-label="番号付きリスト">1.</button>
+            </div>
+            <textarea id="comment-text" placeholder="コメントを書く..." aria-label="コメントを書く"></textarea>
+          </div>
+          <div class="comment-footer">
+            <span class="hint">Markdownに対応 · このモック内だけに表示されます</span>
+            <button type="submit" class="button button-green">コメント</button>
+          </div>
+        </form>
+      </section>
+
+    </div>
+  </main>
+
+  <aside class="side-panel" id="create-panel" aria-labelledby="panel-title" hidden>
+      <header class="panel-titlebar">
+        <span id="panel-title">新しい項目を作成</span>
+        <button type="button" class="close-panel" id="close-panel" aria-label="閉じる">×</button>
+      </header>
+      <form id="create-form">
+        <div class="form-content">
+          <div class="field">
+            <label for="new-title">タイトル</label>
+            <input id="new-title" placeholder="タイトルを入力" required>
+          </div>
+          <div class="field">
+            <label for="new-description">説明 <span class="optional">(任意)</span></label>
+            <div class="editor-shell">
+              <div class="editor-toolbar" aria-label="説明の書式設定">
+                <button type="button" class="tool" data-mark="heading" data-for="new-description" aria-label="見出し">H</button>
+                <button type="button" class="tool" data-mark="bold" data-for="new-description" aria-label="太字"><strong>B</strong></button>
+                <button type="button" class="tool" data-mark="italic" data-for="new-description" aria-label="斜体"><i>I</i></button>
+                <button type="button" class="tool" data-mark="quote" data-for="new-description" aria-label="引用">❞</button>
+                <button type="button" class="tool" data-mark="code" data-for="new-description" aria-label="コード">&lt;/&gt;</button>
+                <button type="button" class="tool" data-mark="link" data-for="new-description" aria-label="リンク">↗</button>
+                <span class="toolbar-divider"></span>
+                <button type="button" class="tool" data-mark="ul" data-for="new-description" aria-label="箇条書き">☷</button>
+                <button type="button" class="tool" data-mark="ol" data-for="new-description" aria-label="番号付きリスト">1.</button>
+                <button type="button" class="tool" data-mark="checklist" data-for="new-description" aria-label="チェックリスト">☑</button>
+              </div>
+              <textarea class="description" id="new-description" placeholder="説明を書く...&#10;&#10;背景や対応方針などを記録できます。"></textarea>
+            </div>
+          </div>
+          <p class="hint">この画面はプレビューです。作成してもファイルには保存されません。</p>
+        </div>
+        <footer class="panel-actions">
+          <button type="button" class="button" id="cancel-create">閉じる</button>
+          <button type="submit" class="button button-green">作成</button>
+        </footer>
+      </form>
+  </aside>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script>
+    const panel = document.getElementById("create-panel");
+    const workspace = document.getElementById("workspace");
+    const titleInput = document.getElementById("new-title");
+    const detailButton = document.getElementById("show-detail");
+    const createButton = document.getElementById("show-create");
+    const toast = document.getElementById("toast");
+    const labelEditor = document.getElementById("label-editor");
+    const labelName = document.getElementById("label-name");
+    const labelError = document.getElementById("label-error");
+    let labels = ["enhancement"];
+
+    const formatTools = [
+      ["heading", "見出し", "H"],
+      ["bold", "太字", "B"],
+      ["italic", "斜体", "I"],
+      ["quote", "引用", "M3 4h10M3 8h10M3 12h7M1 3v10"],
+      ["code", "コード", "M6 4 2 8l4 4M10 4l4 4-4 4"],
+      ["link", "リンク", "M6 10 10 6M6 5l2-2a3 3 0 0 1 4 4l-2 2M10 11l-2 2a3 3 0 0 1-4-4l2-2"],
+      ["ul", "箇条書き", "M6 4h8M6 8h8M6 12h8M2 4h1M2 8h1M2 12h1"],
+      ["ol", "番号付きリスト", "M7 4h7M7 8h7M7 12h7M2 2h1v4M1 6h3M1 9h3l-3 4h3"],
+      ["checklist", "チェックリスト", "M1 3h4v4H1zM1 10l2 2 3-4M8 5h6M8 11h6"],
+      ["undo", "元に戻す", "M6 3 2 7l4 4M2 7h7a5 5 0 0 1 5 5"]
+    ];
+    function populateToolbar(toolbar, target) {
+      toolbar.replaceChildren();
+      formatTools.forEach(([mark, label, icon], index) => {
+        if (index === 6 || index === 9) {
+          const divider = document.createElement("span");
+          divider.className = "toolbar-divider";
+          divider.setAttribute("aria-hidden", "true");
+          toolbar.append(divider);
+        }
+        const tool = document.createElement(mark === "heading" ? "select" : "button");
+        tool.className = "tool";
+        tool.dataset.mark = mark;
+        tool.dataset.for = target;
+        tool.setAttribute("aria-label", label);
+        tool.title = label;
+        if (mark === "heading") {
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "H";
+          tool.append(placeholder);
+          for (let level = 1; level <= 6; level++) {
+            const option = document.createElement("option");
+            option.value = String(level);
+            option.textContent = `H${level}`;
+            tool.append(option);
+          }
+        } else {
+          tool.type = "button";
+          if (mark === "bold" || mark === "italic") {
+            const text = document.createElement(mark === "bold" ? "strong" : "i");
+            text.textContent = icon;
+            tool.append(text);
+          } else {
+            tool.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="${icon}"/></svg>`;
+          }
+        }
+        toolbar.append(tool);
+      });
+    }
+    document.querySelectorAll(".editor-toolbar").forEach(toolbar => {
+      populateToolbar(toolbar, toolbar.querySelector("[data-for]").dataset.for);
+    });
+
+    const editHistories = new WeakMap();
+    function historyFor(editor) {
+      if (!editHistories.has(editor)) {
+        editHistories.set(editor, { values: [editor.value], index: 0 });
+      }
+      return editHistories.get(editor);
+    }
+    document.addEventListener("focusin", event => {
+      if (event.target instanceof HTMLTextAreaElement) historyFor(event.target);
+    });
+    document.addEventListener("input", event => {
+      if (!(event.target instanceof HTMLTextAreaElement)) return;
+      const history = historyFor(event.target);
+      if (history.values[history.index] === event.target.value) return;
+      history.values.splice(history.index + 1);
+      history.values.push(event.target.value);
+      history.index++;
+    });
+    function restoreHistory(editor, redo = false) {
+      const history = historyFor(editor);
+      const index = history.index + (redo ? 1 : -1);
+      if (index < 0 || index >= history.values.length) return;
+      history.index = index;
+      editor.value = history.values[index];
+      editor.focus();
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    document.addEventListener("keydown", event => {
+      if (!(event.target instanceof HTMLTextAreaElement) || event.isComposing) return;
+      if ((event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase())) {
+        event.preventDefault();
+        restoreHistory(event.target, event.shiftKey || event.key.toLowerCase() === "y");
+      }
+    });
+
+    function renderLabels() {
+      const list = document.getElementById("label-list");
+      list.replaceChildren();
+      if (!labels.length) {
+        const empty = document.createElement("span");
+        empty.className = "hint";
+        empty.textContent = "ラベルなし";
+        list.append(empty);
+      }
+      labels.forEach(name => {
+        const chip = document.createElement("span");
+        chip.className = "label-chip";
+        chip.textContent = name;
+        list.append(chip);
+      });
+    }
+    function addLabelRow(name) {
+      const row = document.createElement("div");
+      row.className = "label-edit-row";
+      const input = document.createElement("input");
+      input.value = name;
+      input.setAttribute("aria-label", `ラベル「${name}」の名前`);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "button";
+      remove.textContent = "外す";
+      remove.setAttribute("aria-label", `ラベル「${name}」を外す`);
+      remove.addEventListener("click", () => {
+        row.remove();
+        labelName.focus();
+      });
+      row.append(input, remove);
+      document.getElementById("label-edit-list").append(row);
+    }
+    function openLabels(adding) {
+      document.getElementById("label-menu").open = false;
+      labelEditor.hidden = false;
+      labelError.textContent = "";
+      labelName.value = "";
+      document.getElementById("label-edit-list").replaceChildren();
+      labels.forEach(addLabelRow);
+      (adding ? labelName : labelEditor.querySelector("input")).focus();
+    }
+    function validateLabels(names) {
+      if (names.some(name => !name)) {
+        labelError.textContent = "ラベル名を入力するか、空のラベルを外してください。";
+        return false;
+      }
+      if (new Set(names).size !== names.length) {
+        labelError.textContent = "同じ名前のラベルは追加できません。大文字・小文字は区別します。";
+        return false;
+      }
+      labelError.textContent = "";
+      return true;
+    }
+    function draftLabels() {
+      return Array.from(document.querySelectorAll("#label-edit-list input"), input => input.value.trim());
+    }
+    function appendLabel() {
+      const name = labelName.value.trim();
+      if (!validateLabels([...draftLabels(), name])) {
+        labelName.focus();
+        return;
+      }
+      addLabelRow(name);
+      labelName.value = "";
+      labelName.focus();
+    }
+    document.getElementById("add-label").addEventListener("click", () => openLabels(true));
+    document.getElementById("edit-labels").addEventListener("click", () => openLabels(false));
+    document.getElementById("append-label").addEventListener("click", appendLabel);
+    labelName.addEventListener("keydown", event => {
+      if (event.key === "Enter" && !event.isComposing) {
+        event.preventDefault();
+        appendLabel();
+      }
+    });
+    function closeLabels() {
+      labelEditor.hidden = true;
+      document.querySelector("#label-menu summary").focus();
+    }
+    document.getElementById("cancel-labels").addEventListener("click", closeLabels);
+    labelEditor.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!validateLabels(draftLabels())) return;
+      if (labelName.value.trim()) appendLabel();
+      if (labelError.textContent) return;
+      const names = draftLabels();
+      if (!validateLabels(names)) return;
+      labels = names;
+      renderLabels();
+      closeLabels();
+    });
+    renderLabels();
+
+    function openCreate(editing = false) {
+      panel.hidden = false;
+      workspace.classList.add("panel-open");
+      document.getElementById("panel-title").textContent = editing ? "項目を編集" : "新しい項目を作成";
+      document.querySelector("#create-form .button-green").textContent = editing ? "保存" : "作成";
+      titleInput.focus();
+      detailButton.setAttribute("aria-pressed", "false");
+      createButton.setAttribute("aria-pressed", "true");
+    }
+    function closeCreate() {
+      panel.hidden = true;
+      workspace.classList.remove("panel-open");
+      detailButton.setAttribute("aria-pressed", "true");
+      createButton.setAttribute("aria-pressed", "false");
+      document.getElementById("new-issue").focus();
+    }
+    detailButton.addEventListener("click", closeCreate);
+    createButton.addEventListener("click", () => openCreate());
+    document.getElementById("new-issue").addEventListener("click", () => openCreate());
+    document.getElementById("close-panel").addEventListener("click", closeCreate);
+    document.getElementById("cancel-create").addEventListener("click", closeCreate);
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      const openMenu = document.querySelector(".more-menu[open]");
+      if (openMenu) {
+        openMenu.open = false;
+        openMenu.querySelector("summary").focus();
+      } else if (!labelEditor.hidden) closeLabels();
+      else if (!panel.hidden) closeCreate();
+    });
+
+    function applyFormat(button) {
+        const editor = document.getElementById(button.dataset.for);
+        historyFor(editor);
+        if (button.dataset.mark === "undo") {
+          restoreHistory(editor);
+          return;
+        }
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const selected = editor.value.slice(start, end);
+        const marks = {
+          heading: ["#".repeat(Number(button.value)) + " ", ""],
+          bold: ["**", "**"],
+          italic: ["_", "_"],
+          quote: ["> ", ""],
+          code: selected.includes("\n") ? ["```\n", "\n```"] : ["`", "`"],
+          link: ["[", "](https://)"],
+          ul: ["- ", ""],
+          ol: ["1. ", ""],
+          checklist: ["- [ ] ", ""]
+        };
+        const [before, after] = marks[button.dataset.mark];
+        let replacement;
+        let selectionStart;
+        let selectionEnd;
+        if (["heading", "quote", "ul", "ol", "checklist"].includes(button.dataset.mark)) {
+          const lines = (selected || "リスト項目").split("\n");
+          const prefix = button.dataset.mark === "heading" ? before
+            : button.dataset.mark === "quote" ? "> "
+            : button.dataset.mark === "ul" ? "- "
+            : button.dataset.mark === "ol" ? "1. " : "- [ ] ";
+          const lineStart = editor.value.lastIndexOf("\n", start - 1) + 1;
+          const leading = start > lineStart ? "\n" : "";
+          const trailing = end < editor.value.length && editor.value[end] !== "\n" ? "\n" : "";
+          replacement = leading + lines.map((line, index) =>
+            (button.dataset.mark === "ol" ? `${index + 1}. ` : prefix) + line
+          ).join("\n") + trailing;
+          selectionStart = start + leading.length;
+          selectionEnd = start + replacement.length - trailing.length;
+        } else {
+          const placeholder = selected || (button.dataset.mark === "link" ? "リンク文字列" : "テキスト");
+          replacement = before + placeholder + after;
+          selectionStart = start + before.length;
+          selectionEnd = selectionStart + placeholder.length;
+        }
+        editor.setRangeText(replacement, start, end, "select");
+        editor.setSelectionRange(selectionStart, selectionEnd);
+        editor.focus();
+        editor.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    document.addEventListener("click", event => {
+      const button = event.target.closest("button[data-mark]");
+      if (button) applyFormat(button);
+    });
+    document.addEventListener("change", event => {
+      if (event.target.matches("select[data-mark]") && event.target.value) {
+        applyFormat(event.target);
+        event.target.value = "";
+      }
+    });
+
+    let editorId = 0;
+    function attachCommentMenu(card, description = false) {
+      const header = card.querySelector(".comment-header");
+      const body = card.querySelector(".comment-body");
+      const actions = document.createElement("div");
+      actions.className = "comment-header-actions";
+      actions.append(header.querySelector("time"));
+      const menu = document.createElement("details");
+      menu.className = "more-menu";
+      const summary = document.createElement("summary");
+      summary.textContent = "…";
+      summary.setAttribute("aria-label", description ? "説明の操作" : "コメントの操作");
+      const items = document.createElement("div");
+      items.className = "menu-items";
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = description ? "説明を編集" : "コメントを編集";
+      items.append(edit);
+      menu.append(summary, items);
+      actions.append(menu);
+      header.append(actions);
+      edit.addEventListener("click", () => {
+        menu.open = false;
+        if (card.querySelector(".comment-edit-form")) return;
+        let original = body.innerText.trim();
+        body.hidden = true;
+        const form = document.createElement("form");
+        form.className = "comment-entry comment-edit-form";
+        const shell = document.createElement("div");
+        shell.className = "editor-shell";
+        const toolbar = document.querySelector("#comment-form .editor-toolbar").cloneNode(true);
+        toolbar.setAttribute("aria-label", "編集中の書式設定");
+        const input = document.createElement("textarea");
+        input.id = `comment-edit-${++editorId}`;
+        input.value = original;
+        input.required = !description;
+        input.setAttribute("aria-label", description ? "説明を編集" : "コメントを編集");
+        toolbar.querySelectorAll("[data-for]").forEach(tool => { tool.dataset.for = input.id; });
+        shell.append(toolbar, input);
+        const footer = document.createElement("div");
+        footer.className = "label-editor-actions";
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "button";
+        cancel.textContent = "キャンセル";
+        const save = document.createElement("button");
+        save.type = "submit";
+        save.className = "button button-green";
+        save.textContent = "保存";
+        footer.append(cancel, save);
+        form.append(shell, footer);
+        card.append(form);
+        input.focus();
+        function finish() {
+          form.remove();
+          body.hidden = false;
+          summary.focus();
+        }
+        cancel.addEventListener("click", finish);
+        form.addEventListener("submit", event => {
+          event.preventDefault();
+          if (!description && !input.value.trim()) {
+            input.setCustomValidity("コメントを入力してください。");
+            input.reportValidity();
+            return;
+          }
+          original = input.value;
+          body.textContent = original;
+          finish();
+        });
+        input.addEventListener("input", () => input.setCustomValidity(""));
+      });
+    }
+    attachCommentMenu(document.getElementById("issue-body").closest(".comment-card"), true);
+    attachCommentMenu(document.getElementById("sample-comment"));
+
+    document.getElementById("create-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const title = titleInput.value.trim();
+      if (!title) {
+        titleInput.focus();
+        return;
+      }
+      document.getElementById("issue-title").textContent = title;
+      const description = document.getElementById("new-description").value.trim();
+      document.getElementById("issue-body").innerHTML = description
+        ? `<p>${description.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\n", "<br>")}</p>`
+        : '<p class="empty-side">説明はありません。</p>';
+      document.getElementById("history-event").hidden = true;
+      closeCreate();
+      document.getElementById("create-form").reset();
+      editHistories.delete(document.getElementById("new-description"));
+      toast.textContent = "プレビューを更新しました（未保存）";
+      toast.hidden = false;
+      window.setTimeout(() => { toast.hidden = true; }, 2600);
+    });
+
+    document.getElementById("comment-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const input = document.getElementById("comment-text");
+      const comment = input.value.trim();
+      if (!comment) { input.focus(); return; }
+      const item = document.createElement("article");
+      item.className = "timeline-item";
+      const avatar = document.createElement("span");
+      avatar.className = "avatar";
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.textContent = "K";
+      const card = document.createElement("div");
+      card.className = "comment-card";
+      const header = document.createElement("div");
+      header.className = "comment-header";
+      header.innerHTML = "<span><strong>kazumi38</strong> がコメント</span><time>たった今（モック）</time>";
+      const body = document.createElement("div");
+      body.className = "comment-body";
+      const paragraph = document.createElement("p");
+      paragraph.textContent = comment;
+      body.appendChild(paragraph);
+      card.append(header, body);
+      item.append(avatar, card);
+      document.getElementById("added-comments").appendChild(item);
+      attachCommentMenu(card);
+      input.value = "";
+      editHistories.delete(input);
+    });
+
+    document.getElementById("edit-title").addEventListener("click", () => {
+      document.getElementById("item-menu").open = false;
+      document.getElementById("title-editor").hidden = false;
+      document.getElementById("edited-title").value = document.getElementById("issue-title").textContent;
+      document.getElementById("edited-title").focus();
+    });
+    function closeTitle() {
+      document.getElementById("title-editor").hidden = true;
+      document.querySelector("#item-menu summary").focus();
+    }
+    document.getElementById("cancel-title").addEventListener("click", closeTitle);
+    document.getElementById("title-editor").addEventListener("submit", event => {
+      event.preventDefault();
+      const input = document.getElementById("edited-title");
+      if (!input.value.trim()) {
+        input.setCustomValidity("タイトルを入力してください。");
+        input.reportValidity();
+        return;
+      }
+      document.getElementById("issue-title").textContent = input.value.trim();
+      closeTitle();
+    });
+    document.getElementById("edited-title").addEventListener("input", event => event.target.setCustomValidity(""));
+
+    document.getElementById("state-banner").addEventListener("click", event => {
+      const banner = event.currentTarget;
+      const closed = banner.classList.toggle("closed");
+      document.getElementById("state-label").textContent = closed ? "Closed — 完了" : "Open — 対応中";
+      banner.setAttribute("aria-pressed", String(closed));
+    });
+  </script>
+</body>
+</html>

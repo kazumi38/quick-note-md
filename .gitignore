@@ -3,6 +3,7 @@ build/
 dist
 node_modules
 /media/chat.js
+/media/issueComposer.js
 *.map
 .vscode-test/
 test-results/

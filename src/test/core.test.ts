@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { appendText, parseTodoComments, parseTodos, safeFileName, serializeComments, serializeTodoMetadata, statusInfo, statusOrder } from '../core';
+import { appendText, parseMemoExtension, parseTodoComments, parseTodos, safeFileName, serializeComments, serializeMemoBody, serializeMemoExtension, serializeTodoMetadata, statusInfo, statusOrder } from '../core';
 
 suite('Markdown core', () => {
 	test('all statuses, uppercase X, ordered and nested lists retain source coordinates', () => {
@@ -84,6 +84,59 @@ suite('Markdown core', () => {
 		assert.strictEqual(set.readOnly, true);
 		assert.ok(set.warning);
 		assert.ok(set.sourceText.includes('unfinished'));
+	});
+
+	test('Memo extension round-trips labels and ordered comments without changing legacy body or EOL', () => {
+		for (const eol of ['\n', '\r\n']) {
+			for (const body of ['# Memo\nbody', '# Memo\nbody\n', '']) {
+				const source = serializeMemoExtension(body, [' bug ', '日本語'], ['first\n- [ ] not a task', 'second'], eol);
+				const parsed = parseMemoExtension(source);
+				assert.strictEqual(parsed.readOnly, false);
+				assert.strictEqual(parsed.descriptionMarkdown, body);
+				assert.deepStrictEqual(parsed.labels, ['bug', '日本語']);
+				assert.deepStrictEqual(parsed.comments, ['first\n- [ ] not a task', 'second']);
+				assert.ok(source.includes(eol === '\n' ? '\n<!-- quick-note-md:issue -->' : '\r\n<!-- quick-note-md:issue -->'));
+				assert.deepStrictEqual(parseTodos(source), [], 'Memo comment checkboxes are excluded from Todo parsing');
+			}
+		}
+	});
+
+	test('Memo with no extension remains byte-for-byte legacy Markdown and no fields', () => {
+		const source = '# Existing note\r\n\r\n- [ ] ordinary content\r\n';
+		const parsed = parseMemoExtension(source);
+		assert.strictEqual(parsed.descriptionMarkdown, source);
+		assert.deepStrictEqual(parsed.labels, []);
+		assert.deepStrictEqual(parsed.comments, []);
+		assert.strictEqual(parsed.readOnly, false);
+		assert.strictEqual(serializeMemoExtension(source, [], [], '\r\n'), source);
+	});
+
+	test('Memo checklist body round-trips without exposing its checkboxes as Todo items', () => {
+		for (const eol of ['\n', '\r\n']) {
+			const body = `- [ ] first${eol}- [x] second`;
+			const source = serializeMemoBody(body, eol);
+			assert.strictEqual(parseMemoExtension(source).descriptionMarkdown, body);
+			assert.deepStrictEqual(parseTodos(source), []);
+			const withFooter = serializeMemoExtension(body, ['task-list'], ['comment'], eol);
+			assert.strictEqual(parseMemoExtension(withFooter).descriptionMarkdown, body);
+			assert.deepStrictEqual(parseTodos(withFooter), []);
+		}
+	});
+
+	test('malformed Memo extension is retained and reported read-only', () => {
+		const source = '# Memo\n\n<!-- quick-note-md:issue -->\n'
+			+ '<!-- quick-note-md:comments -->\n<!-- quick-note-md:comment -->\nunfinished\n'
+			+ '<!-- quick-note-md:end-issue -->\n';
+		const parsed = parseMemoExtension(source);
+		assert.strictEqual(parsed.descriptionMarkdown, source);
+		assert.strictEqual(parsed.readOnly, true);
+		assert.ok(parsed.warning);
+	});
+
+	test('Memo extension rejects delimiter injection and duplicate labels', () => {
+		assert.throws(() => serializeMemoExtension('body', ['same', 'same'], [], '\n'));
+		assert.throws(() => serializeMemoExtension('body', ['bad,label'], [], '\n'));
+		assert.throws(() => serializeMemoExtension('body', [], ['text\n<!-- quick-note-md:end-comment -->'], '\n'));
 	});
 
 	for (const eol of ['\n', '\r\n']) {

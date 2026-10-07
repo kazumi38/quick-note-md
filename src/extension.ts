@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { defaultView, isManaged, notesRoot } from './configuration';
-import { safeFileName, statusInfo, statusOrder, TodoStatus } from './core';
+import { statusInfo, statusOrder, TodoStatus } from './core';
 import { DocumentStore } from './documents';
 import { NoteEditor } from './editor';
 import { isCommentNode, MemoNode, Sidebar, todoRefFromNode, TodoNode } from './sidebar';
@@ -13,8 +13,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	const editor = new NoteEditor(context, store);
 	const unifiedView = new SidebarView(context, store);
 	const chatView = new ChatView(context, store);
-	context.subscriptions.push(sidebar, unifiedView, chatView, vscode.window.registerWebviewViewProvider(
-		SidebarView.viewType, unifiedView, { webviewOptions: { retainContextWhenHidden: true } }), vscode.window.registerCustomEditorProvider(
+	context.subscriptions.push(sidebar, unifiedView, chatView, vscode.window.registerCustomEditorProvider(
 		NoteEditor.viewType, editor, { supportsMultipleEditorsPerDocument: true }),
 		vscode.window.registerWebviewViewProvider(ChatView.viewType, chatView, { webviewOptions: { retainContextWhenHidden: true } }));
 
@@ -42,6 +41,13 @@ export function activate(context: vscode.ExtensionContext): void {
 			await chatView.revealAndStartNewChat();
 		} catch (error) {
 			await vscode.window.showErrorMessage(error instanceof Error ? error.message : '新しいチャットを開始できませんでした。');
+		}
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('quick-note-md.openIssues', async () => {
+		try {
+			await unifiedView.reveal();
+		} catch (error) {
+			await vscode.window.showErrorMessage(error instanceof Error ? error.message : 'メモと Todo を開けませんでした。');
 		}
 	}));
 	const memoUri = (item?: unknown, requireManaged = true): vscode.Uri => {
@@ -74,15 +80,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	});
 
 	register('newMemo', async () => {
-		notesRoot();
-		const title = await vscode.window.showInputBox({
-			prompt: '新しいメモのタイトル', ignoreFocusOut: true,
-			validateInput: value => {
-				try { safeFileName(value); return undefined; }
-				catch (error) { return error instanceof Error ? error.message : 'タイトルを入力してください。'; }
-			}
-		});
-		if (title !== undefined) { await open(await store.createMemo(title)); }
+		await unifiedView.revealAndStartCreate('memo');
 	});
 	register('openMemo', async item => open(memoUri(item)));
 	register('appendMemo', async item => {
@@ -91,9 +89,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		if (text !== undefined) { await store.append(uri, text); }
 	});
 	register('newTodo', async () => {
-		notesRoot();
-		const text = await inputLine('新しい Todo');
-		if (text !== undefined) { await store.createTodo(text); }
+		await unifiedView.revealAndStartCreate('todo');
 	});
 	register('addTodoComment', async item => {
 		const todo = todoItem(item).todo;

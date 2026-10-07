@@ -1,7 +1,7 @@
 {
   "name": "quick-note-md",
   "displayName": "QuickNoteMD",
-  "description": "サイドバーで Markdown メモと Todo を管理し、レンダリング表示のまま安全に編集します。",
+  "description": "Issue風のエディター画面で Markdown メモと Todo を管理します。",
   "version": "0.0.1",
   "repository": {
     "type": "git",
@@ -45,7 +45,7 @@
           "type": "object",
           "default": {},
           "scope": "window",
-          "description": "Todo ラベル名とパレット色の対応（ワークスペース共有）。サイドバーから変更できます。"
+          "description": "Todo ラベル名とパレット色の対応（ワークスペース共有）。メモと Todo の画面から変更できます。"
         }
       }
     },
@@ -171,6 +171,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "quick-note-md.openIssues",
+        "title": "QuickNoteMD: メモと Todo を開く",
+        "icon": "$(issues)"
+      },
+      {
         "command": "quick-note-md.newChat",
         "title": "QuickNoteMD: 新しいチャット",
         "icon": "$(add)"
@@ -179,14 +184,19 @@
     "menus": {
       "view/title": [
         {
-          "command": "quick-note-md.newChat",
+          "command": "quick-note-md.openIssues",
           "when": "view == quick-note-md.chat",
           "group": "navigation@0"
         },
         {
-          "command": "quick-note-md.refresh",
+          "command": "quick-note-md.newChat",
           "when": "view == quick-note-md.chat",
           "group": "navigation@1"
+        },
+        {
+          "command": "quick-note-md.refresh",
+          "when": "view == quick-note-md.chat",
+          "group": "navigation@2"
         }
       ],
       "editor/title": [

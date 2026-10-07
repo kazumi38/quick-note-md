@@ -99,6 +99,8 @@ suite('Sidebar and settings', () => {
 		const views = extension.packageJSON.contributes.views['quick-note-md'];
 		assert.deepStrictEqual(views.map((view: { id: string }) => view.id), ['quick-note-md.chat']);
 		assert.strictEqual(views[0].type, 'webview');
+		assert.ok(extension.packageJSON.contributes.commands.some(
+			(command: { command: string }) => command.command === 'quick-note-md.openIssues'));
 		assert.strictEqual(extension.packageJSON.contributes.menus['view/item/context'], undefined);
 		const welcome = extension.packageJSON.contributes.viewsWelcome;
 		assert.ok(welcome.some((item: { view: string; contents: string; when: string }) =>
@@ -108,7 +110,7 @@ suite('Sidebar and settings', () => {
 			(item: { command: string; when: string }) =>
 				item.command === 'quick-note-md.newChat' && item.when === 'view == quick-note-md.chat'));
 		const commands = await vscode.commands.getCommands(true);
-		for (const name of ['newMemo', 'appendMemo', 'openMemo', 'newTodo', 'newChat', 'completeTodo', 'reopenTodo',
+		for (const name of ['newMemo', 'appendMemo', 'openMemo', 'newTodo', 'newChat', 'openIssues', 'completeTodo', 'reopenTodo',
 			'changeStatus', 'deleteTodo', 'showSource', 'showRendered', 'toggleView', 'refresh']) {
 			assert.ok(commands.includes(`quick-note-md.${name}`), name);
 		}

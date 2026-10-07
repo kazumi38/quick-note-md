@@ -1,0 +1,252 @@
+:root {
+  color-scheme: dark;
+  --issue-canvas: #0d1117;
+  --issue-panel: #161b22;
+  --issue-panel-muted: #010409;
+  --issue-border: #30363d;
+  --issue-muted: #9198a1;
+  --issue-link: #4493f8;
+}
+
+.issue-ui {
+  margin: 0;
+  padding: 0;
+  background: var(--issue-canvas);
+  color: #e6edf3;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.issue-ui * { box-sizing: border-box; }
+.issue-ui #app { max-width: none; }
+.issue-ui button, .issue-ui input, .issue-ui select { font: inherit; }
+.issue-ui button {
+  padding: 6px 12px;
+  border: 1px solid var(--issue-border);
+  border-radius: 6px;
+  background: #21262d;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.issue-ui button:hover { background: #30363d; }
+.issue-ui button:disabled { opacity: .5; cursor: not-allowed; }
+.issue-ui button:focus-visible, .issue-ui input:focus-visible,
+.issue-ui select:focus-visible, .issue-ui .ProseMirror:focus-visible {
+  outline: 2px solid var(--issue-link);
+  outline-offset: 2px;
+}
+.issue-ui button.issue-primary {
+  background: #238636;
+  border-color: #2ea043;
+  color: white;
+}
+.issue-ui button.issue-primary:hover { background: #2ea043; }
+.issue-ui input[type="text"], .issue-ui select {
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid #3d444d;
+  border-radius: 7px;
+  background: var(--issue-canvas);
+  color: #e6edf3;
+}
+.issue-ui .warning, .issue-ui [role="alert"] { color: #ff7b72; }
+.issue-ui .notice, .issue-hint { color: var(--issue-muted); }
+.issue-hint { font-size: 12px; font-weight: 400; }
+.issue-ui .issue-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1400px;
+  min-height: 100vh;
+  margin: 0 auto;
+}
+.issue-ui .issue-workspace.panel-open {
+  grid-template-columns: minmax(0, 1fr) minmax(390px, 42%);
+}
+.issue-page { min-width: 0; padding: 34px 24px 60px; }
+.issue-ui .issue-appbar {
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0;
+  margin: 0 0 22px;
+  border: 0;
+}
+.issue-ui .issue-breadcrumb { color: var(--issue-link); }
+.issue-ui .issue-breadcrumb span { color: inherit; }
+.issue-ui .issue-selector { max-width: min(320px, 100%); padding: 6px 10px; }
+.issue-ui .issue-detail { max-width: none; padding: 0; margin: 0; }
+.issue-ui .issue-heading { gap: 20px; padding-bottom: 18px; border-color: var(--issue-border); }
+.issue-ui .issue-title-row { align-items: flex-start; gap: 20px; }
+.issue-ui .issue-title-row h1 {
+  font-size: clamp(22px, 3vw, 32px);
+  font-weight: 400;
+  line-height: 1.25;
+  margin: 0 0 8px;
+}
+.issue-ui .issue-context { color: var(--issue-muted); font-size: 14px; margin: 0; }
+.issue-ui .issue-status-row { margin: 24px 0 20px; gap: 8px; }
+.issue-ui select.issue-status {
+  padding: 9px 13px;
+  max-width: 100%;
+  border: 1px solid #3fb950;
+  border-radius: 7px;
+  background: #1a7f3726;
+  color: #3fb950;
+  font-weight: 600;
+}
+.issue-ui select.issue-status.closed { border-color: #a371f7; background: #8957e526; color: #d2a8ff; }
+.issue-ui .label-chip {
+  padding: 2px 9px;
+  border-radius: 12px;
+  background: #388bfd26;
+  color: #79c0ff;
+  border: 1px solid #388bfd66;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.issue-ui .issue-menu-wrap { flex-shrink: 0; }
+.issue-ui button.issue-menu {
+  padding: 3px 10px;
+  font-size: 20px;
+  line-height: 1.5;
+  background: var(--issue-panel);
+}
+.issue-ui .issue-menu-popover {
+  top: calc(100% + 6px);
+  width: 180px;
+  padding: 6px;
+  border: 1px solid var(--issue-border);
+  border-radius: 8px;
+  background: var(--issue-panel);
+  box-shadow: 0 8px 24px #0008;
+  z-index: 3;
+}
+.issue-ui .issue-menu-popover button { padding: 8px; border: 0; border-radius: 4px; background: transparent; }
+.issue-ui .issue-menu-popover button:hover { background: #30363d; }
+.issue-ui .issue-timeline { max-width: none; }
+.issue-timeline-item { position: relative; padding-left: 42px; margin-bottom: 20px; }
+.issue-timeline-item::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 39px;
+  bottom: -25px;
+  width: 2px;
+  background: var(--issue-border);
+}
+.issue-timeline-item:last-child::before { display: none; }
+.issue-avatar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #6e7681;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #f0a45d, #8b5cf6 56%, #388bfd);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+}
+.issue-ui .issue-card {
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--issue-border);
+  border-radius: 7px;
+}
+.issue-ui .issue-card > header {
+  margin: 0;
+  padding: 9px 14px;
+  border-radius: 7px 7px 0 0;
+  border-color: var(--issue-border);
+  background: var(--issue-panel);
+  color: var(--issue-muted);
+  font-size: 12px;
+}
+.issue-ui .issue-card > header strong { color: #e6edf3; }
+.issue-ui .issue-card .preview { padding: 14px 16px; line-height: 1.65; white-space: normal; overflow-wrap: anywhere; }
+.issue-ui .preview p { margin: 0 0 12px; }
+.issue-ui .preview p:last-child { margin-bottom: 0; }
+.issue-ui .preview ul { margin: 8px 0 0; padding-left: 22px; }
+.issue-ui .preview pre, .issue-ui .preview table { max-width: 100%; overflow-x: auto; }
+.issue-ui .preview a { color: var(--issue-link); }
+.issue-ui .issue-comments { margin-top: 20px; }
+.issue-ui .issue-comments > h2 { border: 0; font-size: 14px; color: var(--issue-muted); margin: 0 0 16px 42px; padding: 0; }
+.issue-ui .issue-new-comment { padding: 16px; margin-top: 20px; background: var(--issue-panel); }
+.issue-new-comment > strong { display: block; margin-bottom: 8px; }
+.issue-ui .issue-composer { overflow: hidden; border: 1px solid #3d444d; border-radius: 8px; }
+.issue-ui .issue-toolbar {
+  min-height: 36px;
+  padding: 4px 6px;
+  gap: 2px;
+  border-bottom: 1px solid var(--issue-border);
+  background: var(--issue-panel);
+  color: var(--issue-muted);
+}
+.issue-ui .issue-toolbar .issue-tool {
+  min-width: 27px;
+  height: 27px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+  font-weight: 650;
+}
+.issue-ui .issue-toolbar .issue-tool:hover { background: #30363d; color: #e6edf3; }
+.issue-ui .issue-tool[data-command="斜体"] { font-style: italic; }
+.issue-ui .issue-toolbar select.issue-tool { width: 49px; cursor: pointer; }
+.issue-ui .issue-toolbar [role="separator"] { height: 18px; align-self: center; margin: 0 5px; border-color: var(--issue-border); }
+.issue-ui .issue-editor { min-height: 100px; padding: 0; border: 0; background: var(--issue-canvas); color: #e6edf3; }
+.issue-ui .ProseMirror { min-height: 100px; padding: 12px; outline: none; overflow-wrap: anywhere; white-space: pre-wrap; }
+.issue-ui .ProseMirror > * { margin: 0 0 12px; }
+.issue-ui .ProseMirror > :last-child { margin-bottom: 0; }
+.issue-ui .ProseMirror pre, .issue-ui .ProseMirror table { max-width: 100%; overflow-x: auto; }
+.issue-ui .ProseMirror li[data-task-status] { list-style: none; }
+.issue-ui .ProseMirror .task-status { margin-right: 6px; }
+.issue-ui .ProseMirror .task-content { display: inline; }
+.issue-ui .issue-card > .issue-composer { margin: 16px; }
+.issue-ui .issue-card > .issue-actions { justify-content: flex-end; margin: 12px 16px 16px; }
+.issue-ui .issue-new-comment > .issue-composer { margin: 0; }
+.issue-comment-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; }
+.issue-ui .issue-label-editor { padding: 16px; border: 1px solid var(--issue-border); border-radius: 8px; background: var(--issue-panel); }
+.issue-ui .issue-label-editor .issue-status-row { margin-top: 0; }
+.issue-ui .issue-create-panel, .issue-ui .issue-create-panel:not(.wide), .issue-ui .issue-create-panel.wide {
+  position: sticky;
+  inset: auto;
+  top: 0;
+  width: auto;
+  min-width: 0;
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  border: 0;
+  border-left: 1px solid var(--issue-border);
+  background: var(--issue-panel-muted);
+  box-shadow: none;
+}
+.issue-panel-titlebar { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--issue-border); background: var(--issue-panel-muted); }
+.issue-panel-titlebar h2 { font-size: 14px; font-weight: 650; margin: 0; }
+.issue-ui button.issue-close { padding: 0 4px; border: 0; background: none; color: var(--issue-muted); font-size: 21px; }
+.issue-form-content { padding: 17px 18px 16px; }
+.issue-ui .issue-create-panel label { display: block; font-weight: 600; margin: 0 0 8px; }
+.issue-ui .issue-create-panel label input { display: block; margin: 8px 0 18px; }
+.issue-create-panel .ProseMirror { min-height: 225px; line-height: 1.6; }
+.issue-panel-actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 9px; padding: 12px 18px; border-top: 1px solid var(--issue-border); background: var(--issue-canvas); }
+@media (max-width: 700px) {
+  .issue-ui .issue-workspace.panel-open { display: block; }
+  .issue-workspace.panel-open .issue-page { display: none; }
+  .issue-ui .issue-create-panel { border-left: 0; }
+  .issue-page { padding: 24px 16px 40px; }
+}
+@media (max-width: 460px) {
+  .issue-page { padding: 20px 12px 36px; }
+  .issue-panel-actions { padding: 10px 12px; gap: 6px; }
+  .issue-form-content { padding: 14px 14px 10px; }
+  .issue-comment-footer { align-items: flex-start; flex-direction: column; }
+}
+@media (forced-colors: active) {
+  .issue-ui button, .issue-ui input, .issue-ui select, .issue-ui .issue-card, .issue-ui .issue-composer { border-color: ButtonText; }
+}
