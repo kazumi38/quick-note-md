@@ -1,25 +1,27 @@
 # QuickNoteMD
 
-QuickNoteMD は VS Code で Markdown チャットを扱い、メモと Todo を GitHub Issue 風の画面で管理する拡張機能です。
-会話・メモ・Todo はワークスペース内の通常の `.md` ファイルとして保存されます。Issue 風 UI の操作は[画像付き手順書](specs/012-github-issue-ui/user-guide.md)を参照してください。
+QuickNoteMD は、VS Code の QuickNoteMD サイドバーだけで Issue の一覧、検索、作成、編集、コメントを行う拡張機能です。Issue の説明はヘッダー、コメントは時系列のタイムラインに分けて表示します。Issue のためにエディターや別ウィンドウを開きません。
 
 ## 使い方
 
-1. VS Code で作業フォルダーを開き、アクティビティバーの **QuickNoteMD** を選びます。
-2. **チャット** ビューで **新しいチャット** を選び、タイトルと本文を入力します。
-3. 入力欄内で見出し・強調・リスト・引用・コード・表を整形表示し、同じ場所で編集します。Enter は改行で、送信は明示的な **送信** 操作だけで行います。
-4. 初回送信で `notes/` 配下にチャット Markdown が作成されます。チャットを選ぶと会話を読み、返信を入力して送信できます。
-5. 保存済みメッセージにあるチェック項目は、チャット文書が未保存・競合・読み取り専用でない場合に切り替えられます。**原文を開く** から通常の Markdown エディターで確認できます。
+1. VS Code でワークスペースフォルダーを開き、アクティビティバーの **QuickNoteMD** を選択します。
+2. Issue 一覧から選ぶか、**新規Issue** でタイトルと Markdown 本文を入力して作成します。状態とラベルを編集し、説明・コメントもサイドバー内で更新できます。
+3. 検索欄と状態フィルターで一覧を絞り込みます。Markdown の編集・プレビュー切り替えでは入力内容が維持されます。
 
-`quick-note-md.notesDirectory` で保存先をワークスペース内の相対フォルダーに変更できます。絶対パス、保存先外への移動、シンボリックリンクを経由した更新は許可しません。
+## 保存形式
 
-## データ保護
+Issue はワークスペースの `.quick-note-md/issues/issue-000027.md` のような単一 Markdown ファイルに保存します。先頭の HTML comment marker にタイトル・状態・ラベル・日時を、本文に説明を、隠し marker で囲んだ領域にコメントを保存します。`.meta` sidecar やコメント別ファイルは作成しません。`.sequence.md` は削除後も番号を再利用しないための採番台帳です。
 
-- 送信前の下書きはチャットファイルへ書き込まず、VS Code の global storage にバックアップします。
-- 保存時は管理対象の範囲、未保存文書、外部変更、読み取り専用、対象メッセージを再確認します。競合や保存失敗時は下書きを残します。
-- Markdown 由来の任意 HTML は実行せず、リンクは遷移不可、画像は外部取得しません。
-- 新しいチャット形式は標準 HTML コメントでメッセージ範囲を識別します。本文中の `#`、`##`、`###` は通常の Markdown 見出しとして保持されます。
-- 旧形式・破損形式など安全に識別できないファイルは自動変換せず、原文を確認できる状態にします。
+marker の欠落、破損、未知 version、外部変更、未保存エディターとの競合を検出した場合は推測修復や上書きをせず、Issue を読み取り専用にして原文・下書きを保持します。Markdown 表示では任意 HTML を実行せず、リンク遷移と外部画像取得も行いません。
+
+## 初回の旧データ削除について
+
+QuickNoteMD の Issue ビューを初めて開く際、旧機能からの移行として次の専用データを確認なしで削除します（旧 Todo・メモ・チャットとその履歴を削除することはユーザーが明示承認済みです）。
+
+- 旧 `quick-note-md.notesDirectory` のフォルダー全体（既定値はワークスペース内の `notes/`。手作業で置かれたファイルも含む）
+- extension global storage の `chat-drafts/` と `sidebar-drafts/`
+
+Issue 保存先、Issue 下書き、global storage のその他のデータは削除しません。削除先が Issue 保存先と重複する場合、または symlink・I/O エラーを検出した場合は削除と Issue の読み書きを停止します。旧設定値は移行のために読み取りますが、以後の設定項目としては提供しません。
 
 ## 開発と検証
 
@@ -31,15 +33,8 @@ npm.cmd run lint
 npm.cmd test
 ```
 
-`npm test` は Extension Host 上でテストを実行し、その前に TypeScript、Extension/Webview bundle、ESLint を検証します。手動シナリオと受入記録は [Task 009 quickstart](specs/009-realtime-markdown-chat/quickstart.md) と [受入テスト](specs/009-realtime-markdown-chat/acceptance-tests.md) を参照してください。
-
-### ローカル E2E テスト
-
-Windows では Playwright で実際の VS Code 上のチャット Webview を操作できます。初回実行時は VS Code 1.138.0 をダウンロードするため、ネットワーク接続が必要です。
+`npm test` は VS Code Extension Host でユニット・統合テストを実行し、その前に TypeScript、Webpack、ESLint を検証します。Windows の Playwright E2E は一時ワークスペースと専用 VS Code プロファイルで実行します。
 
 ```powershell
 npm.cmd run test:e2e
-npm.cmd run test:e2e -- --grep "new chat"
 ```
-
-各シナリオは一時ワークスペースと VS Code プロファイルを使用します。既存の `npm.cmd test` は従来どおり Extension Host テストのみを実行します。E2E の実行手順とトラブルシューティングは [E2E quickstart](specs/011-automated-test-scenarios/quickstart.md) を参照してください。

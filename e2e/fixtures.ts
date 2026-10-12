@@ -1,26 +1,20 @@
 import { test as base, expect, type ElectronApplication, type Frame, type Page, type TestInfo } from '@playwright/test';
-import { copyFile, mkdir } from 'fs/promises';
+import { mkdir } from 'fs/promises';
 import { dirname, join } from 'path';
-import { cleanupScenarioEnvironment, createScenarioEnvironment, seedNotesDirectory, type ScenarioEnvironment } from './support/environment';
-import { closeVSCode, launchVSCode, openChatView } from './support/vscode-app';
+import { cleanupScenarioEnvironment, createScenarioEnvironment, type ScenarioEnvironment } from './support/environment';
+import { closeVSCode, launchVSCode, openIssueView } from './support/vscode-app';
 
 interface E2EFixtures {
-	fixtureChat: 'saved-chat' | undefined;
 	environment: ScenarioEnvironment;
 	application: ElectronApplication;
 	workbench: Page;
-	chat: Frame;
+	issues: Frame;
 }
 
 export const test = base.extend<E2EFixtures>({
-	fixtureChat: [undefined, { option: true }],
-	environment: async ({ fixtureChat }, use) => {
+	environment: async ({}, use) => {
 		const environment = await createScenarioEnvironment();
 		try {
-			if (fixtureChat === 'saved-chat') {
-				const notesPath = await seedNotesDirectory(environment);
-				await copyFile(join(__dirname, 'fixtures', 'saved-chat.md'), join(notesPath, 'Saved E2E Chat.md'));
-			}
 			await use(environment);
 		} finally {
 			await cleanupScenarioEnvironment(environment);
@@ -40,8 +34,8 @@ export const test = base.extend<E2EFixtures>({
 		await use(page);
 		await captureFailureArtifacts(page, application, testInfo);
 	},
-	chat: async ({ workbench }, use) => {
-		await use(await openChatView(workbench));
+	issues: async ({ workbench }, use) => {
+		await use(await openIssueView(workbench));
 	}
 });
 

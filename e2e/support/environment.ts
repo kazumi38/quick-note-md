@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm } from 'fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { isAbsolute, join, relative, resolve, sep } from 'path';
 import { downloadAndUnzipVSCode } from '@vscode/test-electron';
@@ -53,8 +53,22 @@ export async function cleanupScenarioEnvironment(environment: ScenarioEnvironmen
 	await rm(root, { recursive: true, force: true });
 }
 
-export async function seedNotesDirectory(environment: ScenarioEnvironment): Promise<string> {
-	const notesPath = join(environment.workspacePath, 'notes');
-	await mkdir(notesPath, { recursive: true });
-	return notesPath;
+export async function seedIssues(environment: ScenarioEnvironment, count: number): Promise<string> {
+	const directory = join(environment.workspacePath, '.quick-note-md', 'issues');
+	await mkdir(directory, { recursive: true });
+	for (let id = 1; id <= count; id++) {
+		const timestamp = new Date(Date.UTC(2026, 0, id)).toISOString();
+		const title = `Seed issue ${String(id).padStart(2, '0')}`;
+		const state = id % 2 === 0 ? 'closed' : 'open';
+		const source = [
+			`<!-- quick-note-md:issue:v1 ${JSON.stringify({
+				id, title, state, labels: ['seed'], createdAt: timestamp, updatedAt: timestamp,
+			})} -->`,
+			'',
+			`Description for seed ${String(id).padStart(2, '0')}.`,
+		].join('\n');
+		await writeFile(join(directory, `issue-${String(id).padStart(6, '0')}.md`), source, 'utf8');
+	}
+	await writeFile(join(directory, '.sequence.md'), `<!-- quick-note-md:sequence:v1 ${JSON.stringify({ nextId: count + 1 })} -->\n`, 'utf8');
+	return directory;
 }

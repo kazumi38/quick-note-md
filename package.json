@@ -1,7 +1,7 @@
 {
   "name": "quick-note-md",
   "displayName": "QuickNoteMD",
-  "description": "Issue風のエディター画面で Markdown メモと Todo を管理します。",
+  "description": "Markdownファイルで管理するローカルIssueサイドバー",
   "version": "0.0.1",
   "repository": {
     "type": "git",
@@ -14,41 +14,12 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:quick-note-md.chat"
+    "onView:quick-note-md.issues",
+    "onCommand:quick-note-md.newIssue",
+    "onCommand:quick-note-md.refresh"
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "configuration": {
-      "title": "QuickNoteMD",
-      "properties": {
-        "quick-note-md.notesDirectory": {
-          "type": "string",
-          "default": "notes",
-          "scope": "resource",
-          "description": "最初のワークスペースフォルダー内のノート保存先（相対パス）。"
-        },
-        "quick-note-md.defaultView": {
-          "type": "string",
-          "enum": [
-            "rendered",
-            "source"
-          ],
-          "enumDescriptions": [
-            "レンダリング表示（安全なテキスト部分を直接編集）",
-            "標準の Markdown テキストエディタ"
-          ],
-          "default": "rendered",
-          "scope": "resource",
-          "description": "メモを作成・開く際の表示モード。ファイル別の表示履歴は保存しません。"
-        },
-        "quick-note-md.labelColors": {
-          "type": "object",
-          "default": {},
-          "scope": "window",
-          "description": "Todo ラベル名とパレット色の対応（ワークスペース共有）。メモと Todo の画面から変更できます。"
-        }
-      }
-    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -61,149 +32,41 @@
     "views": {
       "quick-note-md": [
         {
-          "id": "quick-note-md.chat",
-          "name": "チャット",
+          "id": "quick-note-md.issues",
+          "name": "Issues",
           "type": "webview"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "quick-note-md.chat",
-        "contents": "チャットはまだありません。[新しいチャットを始める](command:quick-note-md.newChat)"
-      }
-    ],
-    "customEditors": [
-      {
-        "viewType": "quick-note-md.rendered",
-        "displayName": "QuickNoteMD レンダリング表示",
-        "selector": [
-          {
-            "filenamePattern": "*.md"
-          }
-        ],
-        "priority": "option"
+        "view": "quick-note-md.issues",
+        "contents": "Issueはまだありません。[Issueを作成](command:quick-note-md.newIssue)"
       }
     ],
     "commands": [
       {
-        "command": "quick-note-md.newMemo",
-        "title": "QuickNoteMD: 新規メモ",
-        "icon": "$(new-file)"
-      },
-      {
-        "command": "quick-note-md.openMemo",
-        "title": "QuickNoteMD: メモを開く"
-      },
-      {
-        "command": "quick-note-md.appendMemo",
-        "title": "QuickNoteMD: メモに追記",
+        "command": "quick-note-md.newIssue",
+        "title": "QuickNoteMD: 新規Issue",
         "icon": "$(add)"
-      },
-      {
-        "command": "quick-note-md.newTodo",
-        "title": "QuickNoteMD: 新規 Todo",
-        "icon": "$(add)"
-      },
-      {
-        "command": "quick-note-md.addTodoComment",
-        "title": "QuickNoteMD: Todo コメントを追加",
-        "icon": "$(comment)"
-      },
-      {
-        "command": "quick-note-md.editTodoBody",
-        "title": "QuickNoteMD: Todo 本文を編集",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "quick-note-md.deleteTodoComment",
-        "title": "QuickNoteMD: リプライを削除",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "quick-note-md.editTodoComment",
-        "title": "QuickNoteMD: Todo コメントを編集",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "quick-note-md.editTodoMetadata",
-        "title": "QuickNoteMD: Todo ラベル・対応日を編集",
-        "icon": "$(tag)"
-      },
-      {
-        "command": "quick-note-md.completeTodo",
-        "title": "QuickNoteMD: Todo を完了",
-        "icon": "$(check)"
-      },
-      {
-        "command": "quick-note-md.reopenTodo",
-        "title": "QuickNoteMD: Todo を再開",
-        "icon": "$(discard)"
-      },
-      {
-        "command": "quick-note-md.changeStatus",
-        "title": "QuickNoteMD: ステータスを変更",
-        "icon": "$(list-selection)"
-      },
-      {
-        "command": "quick-note-md.deleteTodo",
-        "title": "QuickNoteMD: Todo を削除",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "quick-note-md.showSource",
-        "title": "QuickNoteMD: 生 Markdown を表示",
-        "icon": "$(go-to-file)"
-      },
-      {
-        "command": "quick-note-md.showRendered",
-        "title": "QuickNoteMD: レンダリング表示に切り替え",
-        "icon": "$(open-preview)"
-      },
-      {
-        "command": "quick-note-md.toggleView",
-        "title": "QuickNoteMD: 表示モードを切り替え",
-        "icon": "$(open-preview)"
       },
       {
         "command": "quick-note-md.refresh",
-        "title": "QuickNoteMD: 一覧を更新",
+        "title": "QuickNoteMD: Issue一覧を更新",
         "icon": "$(refresh)"
-      },
-      {
-        "command": "quick-note-md.openIssues",
-        "title": "QuickNoteMD: メモと Todo を開く",
-        "icon": "$(issues)"
-      },
-      {
-        "command": "quick-note-md.newChat",
-        "title": "QuickNoteMD: 新しいチャット",
-        "icon": "$(add)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "quick-note-md.openIssues",
-          "when": "view == quick-note-md.chat",
-          "group": "navigation@0"
-        },
-        {
-          "command": "quick-note-md.newChat",
-          "when": "view == quick-note-md.chat",
+          "command": "quick-note-md.newIssue",
+          "when": "view == quick-note-md.issues",
           "group": "navigation@1"
         },
         {
           "command": "quick-note-md.refresh",
-          "when": "view == quick-note-md.chat",
+          "when": "view == quick-note-md.issues",
           "group": "navigation@2"
-        }
-      ],
-      "editor/title": [
-        {
-          "command": "quick-note-md.toggleView",
-          "when": "resourceExtname == .md",
-          "group": "navigation"
         }
       ]
     }
@@ -211,10 +74,10 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "webpack",
-    "compile:webview": "webpack --config-name chat-webview",
+    "compile:webview": "webpack --config-name issue-webview",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "compile-tests": "tsc -p . --outDir out",
+    "compile-tests": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\" && tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "test:e2e": "npm run compile && tsc -p e2e/tsconfig.json --noEmit && playwright test --config e2e/playwright.config.ts",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",

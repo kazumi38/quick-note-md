@@ -4,7 +4,7 @@ import {
 	liftEmptyBlock, newlineInCode, selectNodeBackward, splitBlock
 } from 'prosemirror-commands';
 import { splitListItem } from 'prosemirror-schema-list';
-import { composerSchema } from './chatComposerModel';
+import { composerSchema } from './markdownComposerModel';
 
 export function splitOnEnter(state: EditorState, dispatch?: (transaction: Transaction) => void): boolean {
 	if (!dispatch) { return false; }

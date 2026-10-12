@@ -3,8 +3,8 @@ import { TextSelection } from 'prosemirror-state';
 import { setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
 import { redo, undo } from 'prosemirror-history';
 import { wrapInList } from 'prosemirror-schema-list';
-import { createChatComposer } from './chatComposer';
-import { composerSchema } from './chatComposerModel';
+import { createMarkdownComposer } from './markdownComposer';
+import { composerSchema } from './markdownComposerModel';
 
 export interface IssueComposer {
 	destroy(): void;
@@ -85,7 +85,7 @@ export function createIssueComposer(
 	onError: (message: string) => void,
 ): IssueComposer {
 	parent.classList.add('issue-composer-root');
-	const composer = createChatComposer(parent, initialMarkdown, onChange, onError);
+	const composer = createMarkdownComposer(parent, initialMarkdown, onChange, onError);
 	const view = composer.view;
 	view.dom.setAttribute('aria-label', ariaLabel);
 
