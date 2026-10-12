@@ -27,14 +27,14 @@ const extensionConfig = {
   infrastructureLogging: { level: 'log' }
 };
 
-const chatConfig = {
-  name: 'chat-webview',
+const issueWebviewConfig = {
+  name: 'issue-webview',
   target: 'web',
   mode: 'none',
-  entry: './src/webview/chat.ts',
+  entry: './src/webview/issue.ts',
   output: {
     path: path.resolve(__dirname, 'media'),
-    filename: 'chat.js'
+    filename: 'issue.js'
   },
   resolve: { extensions: ['.ts', '.js'] },
   module: {
@@ -73,4 +73,4 @@ const issueComposerConfig = {
   devtool: 'nosources-source-map'
 };
 
-module.exports = [extensionConfig, chatConfig, issueComposerConfig];
+module.exports = [extensionConfig, issueWebviewConfig, issueComposerConfig];

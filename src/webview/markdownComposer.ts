@@ -6,8 +6,8 @@ import { inputRules, InputRule, textblockTypeInputRule, wrappingInputRule } from
 import { baseKeymap } from 'prosemirror-commands';
 import {
 	composerSchema, composerParser, composerSerializer, serializeComposerDocument, tableEditing
-} from './chatComposerModel';
-import { backspace, softBreak, splitOnEnter } from './chatComposerCommands';
+} from './markdownComposerModel';
+import { backspace, softBreak, splitOnEnter } from './markdownComposerCommands';
 
 function composerInputRules() {
 	const { nodes, marks } = composerSchema;
@@ -60,17 +60,17 @@ function composerInputRules() {
 	];
 }
 
-export interface ChatComposer {
+export interface MarkdownComposer {
 	view: EditorView;
 	destroy(): void;
 }
 
-export function createChatComposer(
+export function createMarkdownComposer(
 	parent: HTMLElement,
 	initialMarkdown: string,
 	onChange: (markdown: string) => void,
 	onError: (message: string) => void
-): ChatComposer {
+): MarkdownComposer {
 	const document = composerParser.parse(initialMarkdown);
 	const state = EditorState.create({
 		doc: document,
@@ -92,7 +92,7 @@ export function createChatComposer(
 	const view = new EditorView(parent, {
 		state,
 		attributes: {
-			class: 'chat-composer-editor',
+			class: 'markdown-composer-editor',
 			role: 'textbox',
 			'aria-multiline': 'true',
 			'aria-label': 'Markdown メッセージ本文',

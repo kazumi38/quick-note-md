@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { history, redo, undo } from 'prosemirror-history';
-import { backspace, softBreak, splitOnEnter } from '../webview/chatComposerCommands';
-import { composerSchema, parseComposerMarkdown, serializeComposerDocument } from '../webview/chatComposerModel';
+import { backspace, softBreak, splitOnEnter } from '../webview/markdownComposerCommands';
+import { composerSchema, parseComposerMarkdown, serializeComposerDocument } from '../webview/markdownComposerModel';
 
 function stateWith(markdown: string, position?: number): EditorState {
 	const doc = parseComposerMarkdown(markdown);
@@ -29,7 +29,7 @@ function textblockStart(state: EditorState, type: string): number {
 	return found!;
 }
 
-suite('Chat composer Markdown model', () => {
+suite('Reusable Markdown composer model', () => {
 	test('round-trips headings, emphasis, lists, callouts, code, statuses, and tables', () => {
 		const source = [
 			'# Heading',
