@@ -80,6 +80,7 @@
     "compile-tests": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\" && tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "test:e2e": "npm run compile && tsc -p e2e/tsconfig.json --noEmit && playwright test --config e2e/playwright.config.ts",
+    "test:e2e:guide": "npm run compile && tsc -p e2e/tsconfig.json --noEmit && playwright test --config e2e/playwright.config.ts e2e/manual-guide.spec.ts --grep @guide",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src e2e",
     "test": "vscode-test"
