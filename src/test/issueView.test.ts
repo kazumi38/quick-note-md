@@ -32,6 +32,27 @@ suite('Issue sidebar message validation', () => {
 		}), undefined);
 	});
 
+	test('accepts optional bounded label filters and rejects malformed filter messages', () => {
+		assert.deepStrictEqual(validateIssueViewMessage({
+			kind: 'setFilter', query: '', stateFilter: 'all',
+		}), { kind: 'setFilter', query: '', stateFilter: 'all' });
+		assert.deepStrictEqual(validateIssueViewMessage({
+			kind: 'setFilter', query: 'needle', stateFilter: 'closed', label: 'bug',
+		}), { kind: 'setFilter', query: 'needle', stateFilter: 'closed', label: 'bug' });
+		assert.deepStrictEqual(validateIssueViewMessage({
+			kind: 'setFilter', query: '', stateFilter: 'all', label: '',
+		}), { kind: 'setFilter', query: '', stateFilter: 'all', label: '' });
+		assert.strictEqual(validateIssueViewMessage({
+			kind: 'setFilter', query: '', stateFilter: 'all', label: 1,
+		}), undefined);
+		assert.strictEqual(validateIssueViewMessage({
+			kind: 'setFilter', query: '', stateFilter: 'all', label: 'x'.repeat(1001),
+		}), undefined);
+		assert.strictEqual(validateIssueViewMessage({
+			kind: 'setFilter', query: '', stateFilter: 'all', label: 'bug', unexpected: true,
+		}), undefined);
+	});
+
 	test('accepts supported title, label, and comment operations', () => {
 		assert.deepStrictEqual(validateIssueViewMessage({
 			kind: 'saveField', operationId: 'op-1', issueId: 27, field: 'title', value: 'Title', baseRevision: 2,

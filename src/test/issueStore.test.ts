@@ -46,6 +46,37 @@ suite('IssueStore', () => {
 		assert.strictEqual(two.id, 2);
 	});
 
+	test('filters by an exact label and returns stable candidates from every valid Issue', async () => {
+		const bug = await store.create({ title: 'Bug report', bodyMarkdown: 'needle' });
+		await store.update(bug.id, bug.revision, { labels: ['bug', 'shared'] });
+		const docs = await store.create({ title: 'Documentation', bodyMarkdown: 'other' });
+		await store.update(docs.id, docs.revision, { labels: ['docs', 'shared'] });
+		await store.create({ title: 'Unlabeled', bodyMarkdown: 'other' });
+
+		const result = await store.list({ query: 'needle', state: 'closed', label: 'bug' });
+		assert.deepStrictEqual(result.issues, []);
+		assert.deepStrictEqual(result.labels, ['bug', 'docs', 'shared']);
+		assert.deepStrictEqual((await store.list({ label: 'bug' })).issues.map(issue => issue.id), [1]);
+		assert.deepStrictEqual((await store.list({ label: 'Bug' })).issues, []);
+	});
+
+	test('combines label, state, and query conditions without changing source files', async () => {
+		const matching = await store.create({ title: 'Needle issue', bodyMarkdown: 'match' });
+		const closed = await store.update(matching.id, matching.revision, { labels: ['bug'], state: 'closed' });
+		const otherLabel = await store.create({ title: 'Needle other', bodyMarkdown: 'match' });
+		await store.update(otherLabel.id, otherLabel.revision, { labels: ['docs'], state: 'closed' });
+		const unrelated = await store.create({ title: 'Different', bodyMarkdown: 'other' });
+		await store.update(unrelated.id, unrelated.revision, { labels: ['bug'] });
+		const path = join(store.root.fsPath, 'issue-000001.md');
+		const before = await readFile(path, 'utf8');
+
+		const result = await store.list({ query: 'needle', state: 'closed', label: 'bug' });
+
+		assert.deepStrictEqual(result.issues.map(issue => issue.id), [1]);
+		assert.strictEqual(await readFile(path, 'utf8'), before);
+		assert.strictEqual(result.issues[0].updatedAt, closed.updatedAt);
+	});
+
 	test('updates a single field and rejects stale revisions without replacing external content', async () => {
 		const issue = await store.create({ title: 'Initial', bodyMarkdown: 'Body' });
 		const path = join(store.root.fsPath, 'issue-000001.md');

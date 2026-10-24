@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { expect, test } from './fixtures';
-import { seedIssues } from './support/environment';
+import { seedIssueFixtures, seedIssues } from './support/environment';
 import { openIssueView } from './support/vscode-app';
 
 test('create, view, comment on, and close an Issue entirely inside the sidebar', async ({ issues, environment, workbench }) => {
@@ -64,6 +64,32 @@ test('finds one of twenty Issues with search and preserves the filter after retu
 	await expect(issues.locator('.issue-list-row')).toHaveCount(1);
 	expect(Date.now() - started).toBeLessThan(30_000);
 	expect(await workbench.locator('.tabs-container .tab').count()).toBe(editorTabsBefore);
+});
+
+test('filters Issues by one label and clears only the label condition', async ({ workbench, environment }) => {
+	await seedIssueFixtures(environment, [
+		{ title: 'Bug alpha', body: 'shared keyword', labels: ['bug', 'shared'], state: 'open' },
+		{ title: 'Bug beta', body: 'shared keyword', labels: ['bug'], state: 'closed' },
+		{ title: 'Docs', body: 'shared keyword', labels: ['docs'], state: 'open' },
+		{ title: 'Unlabeled', body: 'shared keyword', state: 'open' },
+	]);
+	const issues = await openIssueView(workbench);
+	const labelFilter = issues.getByRole('combobox', { name: 'ラベルで絞り込む' });
+
+	await expect(issues.locator('.issue-list-row')).toHaveCount(4);
+	await labelFilter.selectOption('bug');
+	await expect(issues.locator('.issue-list-row')).toHaveCount(2);
+	await expect(issues.locator('.issue-list-row').allTextContents()).resolves.toEqual([
+		expect.stringContaining('Bug beta'),
+		expect.stringContaining('Bug alpha'),
+	]);
+	await expect(issues.getByText('選択中のラベル: bug')).toBeVisible();
+
+	await labelFilter.selectOption('');
+	await expect(issues.locator('.issue-list-row')).toHaveCount(4);
+	await issues.getByRole('searchbox', { name: 'Issueを検索' }).fill('no matching Issue');
+	await expect(issues.getByText('検索結果がありません。')).toBeVisible();
+	await expect(issues.getByText('Issueはまだありません。')).toHaveCount(0);
 });
 
 test('edits title, body, and comments in the sidebar and preserves a draft on conflict', async ({

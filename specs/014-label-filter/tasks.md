@@ -30,9 +30,9 @@
 
 ### Tests for User Story 1
 
-- [ ] T002 [P] [US1] Add IssueStore tests for exact label filtering, deduplicated stable candidates from all valid Issues, and exclusion of unlabeled Issues in `src/test/issueStore.test.ts`
-- [ ] T003 [P] [US1] Add message-validation tests for an optional bounded label filter value and rejection of invalid values or unknown keys in `src/test/issueView.test.ts`
-- [ ] T004 [P] [US1] Add the P1 sidebar E2E case for selecting and clearing a label, including a no-results message distinct from an empty workspace, in `e2e/issue-sidebar.spec.ts`
+- [x] T002 [P] [US1] Add IssueStore tests for exact label filtering, deduplicated stable candidates from all valid Issues, and exclusion of unlabeled Issues in `src/test/issueStore.test.ts`
+- [x] T003 [P] [US1] Add message-validation tests for an optional bounded label filter value and rejection of invalid values or unknown keys in `src/test/issueView.test.ts`
+- [x] T004 [P] [US1] Add the P1 sidebar E2E case for selecting and clearing a label, including a no-results message distinct from an empty workspace, in `e2e/issue-sidebar.spec.ts`
 
 ### Implementation for User Story 1
 
