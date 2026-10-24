@@ -54,21 +54,43 @@ export async function cleanupScenarioEnvironment(environment: ScenarioEnvironmen
 }
 
 export async function seedIssues(environment: ScenarioEnvironment, count: number): Promise<string> {
+	return seedIssueFixtures(environment, Array.from({ length: count }, (_, index) => ({
+		title: `Seed issue ${String(index + 1).padStart(2, '0')}`,
+		body: `Description for seed ${String(index + 1).padStart(2, '0')}.`,
+		state: (index + 1) % 2 === 0 ? 'closed' : 'open',
+		labels: ['seed'],
+		createdAt: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+	})));
+}
+
+export interface IssueFixture {
+	title: string;
+	body: string;
+	state?: 'open' | 'closed';
+	labels?: string[];
+	createdAt?: string;
+}
+
+export async function seedIssueFixtures(environment: ScenarioEnvironment, fixtures: IssueFixture[]): Promise<string> {
 	const directory = join(environment.workspacePath, '.quick-note-md', 'issues');
 	await mkdir(directory, { recursive: true });
-	for (let id = 1; id <= count; id++) {
-		const timestamp = new Date(Date.UTC(2026, 0, id)).toISOString();
-		const title = `Seed issue ${String(id).padStart(2, '0')}`;
-		const state = id % 2 === 0 ? 'closed' : 'open';
+	for (const [index, fixture] of fixtures.entries()) {
+		const id = index + 1;
+		const timestamp = fixture.createdAt ?? new Date(Date.UTC(2026, 0, id)).toISOString();
 		const source = [
 			`<!-- quick-note-md:issue:v1 ${JSON.stringify({
-				id, title, state, labels: ['seed'], createdAt: timestamp, updatedAt: timestamp,
+				id,
+				title: fixture.title,
+				state: fixture.state ?? (id % 2 === 0 ? 'closed' : 'open'),
+				labels: fixture.labels ?? [],
+				createdAt: timestamp,
+				updatedAt: timestamp,
 			})} -->`,
 			'',
-			`Description for seed ${String(id).padStart(2, '0')}.`,
+			fixture.body,
 		].join('\n');
 		await writeFile(join(directory, `issue-${String(id).padStart(6, '0')}.md`), source, 'utf8');
 	}
-	await writeFile(join(directory, '.sequence.md'), `<!-- quick-note-md:sequence:v1 ${JSON.stringify({ nextId: count + 1 })} -->\n`, 'utf8');
+	await writeFile(join(directory, '.sequence.md'), `<!-- quick-note-md:sequence:v1 ${JSON.stringify({ nextId: fixtures.length + 1 })} -->\n`, 'utf8');
 	return directory;
 }

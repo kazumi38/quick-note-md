@@ -12,7 +12,7 @@
 
 **Purpose**: Prepare reusable test data for story-level end-to-end validation.
 
-- [ ] T001 Add a typed Issue fixture-seeding helper that accepts labels, state, title, and body while retaining `seedIssues` compatibility in `e2e/support/environment.ts`
+- [x] T001 Add a typed Issue fixture-seeding helper that accepts labels, state, title, and body while retaining `seedIssues` compatibility in `e2e/support/environment.ts`
 
 ---
 
