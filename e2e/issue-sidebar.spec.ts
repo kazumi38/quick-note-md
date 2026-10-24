@@ -79,10 +79,8 @@ test('filters Issues by one label and clears only the label condition', async ({
 	await expect(issues.locator('.issue-list-row')).toHaveCount(4);
 	await labelFilter.selectOption('bug');
 	await expect(issues.locator('.issue-list-row')).toHaveCount(2);
-	await expect(issues.locator('.issue-list-row').allTextContents()).resolves.toEqual([
-		expect.stringContaining('Bug beta'),
-		expect.stringContaining('Bug alpha'),
-	]);
+	await expect(issues.locator('.issue-list-row').nth(0)).toContainText('Bug beta');
+	await expect(issues.locator('.issue-list-row').nth(1)).toContainText('Bug alpha');
 	await expect(issues.getByText('選択中のラベル: bug')).toBeVisible();
 
 	await labelFilter.selectOption('');
@@ -90,6 +88,57 @@ test('filters Issues by one label and clears only the label condition', async ({
 	await issues.getByRole('searchbox', { name: 'Issueを検索' }).fill('no matching Issue');
 	await expect(issues.getByText('検索結果がありません。')).toBeVisible();
 	await expect(issues.getByText('Issueはまだありません。')).toHaveCount(0);
+});
+
+test('combines label, state, and text filters without changing Issue files', async ({ workbench, environment }) => {
+	await seedIssueFixtures(environment, [
+		{ title: 'Needle open bug', body: 'match', labels: ['bug'], state: 'open' },
+		{ title: 'Needle closed bug', body: 'match', labels: ['bug'], state: 'closed' },
+		{ title: 'Needle closed docs', body: 'match', labels: ['docs'], state: 'closed' },
+		{ title: 'Other closed bug', body: 'other', labels: ['bug'], state: 'closed' },
+		{ title: 'Needle closed unlabeled', body: 'match', state: 'closed' },
+	]);
+	const directory = join(environment.workspacePath, '.quick-note-md', 'issues');
+	const before = await Promise.all([1, 2, 3, 4, 5].map(id =>
+		readFile(join(directory, `issue-${String(id).padStart(6, '0')}.md`), 'utf8')));
+	const issues = await openIssueView(workbench);
+
+	await issues.getByRole('searchbox', { name: 'Issueを検索' }).fill('needle');
+	await issues.getByRole('combobox', { name: '状態で絞り込む' }).selectOption('closed');
+	await issues.getByRole('combobox', { name: 'ラベルで絞り込む' }).selectOption('bug');
+	await expect(issues.locator('.issue-list-row')).toHaveCount(1);
+	await expect(issues.locator('.issue-list-row')).toContainText('Needle closed bug');
+
+	await issues.getByRole('combobox', { name: 'ラベルで絞り込む' }).selectOption('');
+	await expect(issues.locator('.issue-list-row')).toHaveCount(3);
+	await expect(issues.getByRole('searchbox', { name: 'Issueを検索' })).toHaveValue('needle');
+	await expect(issues.getByRole('combobox', { name: '状態で絞り込む' })).toHaveValue('closed');
+	const after = await Promise.all([1, 2, 3, 4, 5].map(id =>
+		readFile(join(directory, `issue-${String(id).padStart(6, '0')}.md`), 'utf8')));
+	expect(after).toEqual(before);
+});
+
+test('preserves label filter when returning from Issue detail', async ({ workbench, environment }) => {
+	await seedIssueFixtures(environment, [
+		{ title: 'Alpha bug', body: 'Find alpha', labels: ['bug'], state: 'open' },
+		{ title: 'Beta bug', body: 'Find beta', labels: ['bug'], state: 'open' },
+		{ title: 'Alpha docs', body: 'Find alpha', labels: ['docs'], state: 'open' },
+	]);
+	const issues = await openIssueView(workbench);
+
+	await issues.getByRole('searchbox', { name: 'Issueを検索' }).fill('alpha');
+	await issues.getByRole('combobox', { name: '状態で絞り込む' }).selectOption('open');
+	await issues.getByRole('combobox', { name: 'ラベルで絞り込む' }).selectOption('bug');
+	await expect(issues.locator('.issue-list-row')).toHaveCount(1);
+	await issues.locator('.issue-list-row').click();
+	await expect(issues.getByRole('heading', { name: 'Alpha bug' })).toBeVisible();
+	await issues.getByRole('button', { name: '一覧へ戻る' }).click();
+
+	await expect(issues.getByRole('combobox', { name: 'ラベルで絞り込む' })).toHaveValue('bug');
+	await expect(issues.getByRole('searchbox', { name: 'Issueを検索' })).toHaveValue('alpha');
+	await expect(issues.getByRole('combobox', { name: '状態で絞り込む' })).toHaveValue('open');
+	await expect(issues.locator('.issue-list-row')).toHaveCount(1);
+	await expect(issues.locator('.issue-list-row')).toContainText('Alpha bug');
 });
 
 test('edits title, body, and comments in the sidebar and preserves a draft on conflict', async ({

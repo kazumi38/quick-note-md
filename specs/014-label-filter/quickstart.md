@@ -74,3 +74,12 @@ npm run lint
 - フィルター変更によるIssueファイル内容・更新日時の変更がない。
 
 これらは実装時に追加・実行するケースであり、本計画作成時点での実行済みテスト結果ではない。
+
+## 実装検証記録
+
+- `npm ci`: 成功。lockfileに基づく依存関係を復元した。npm auditは依存パッケージに5件の脆弱性（Low 3、Moderate 1、High 1）を報告した。依存関係は本機能で変更していない。
+- `npm run compile-tests`: 成功。ソースとユニットテストのTypeScriptコンパイルが完了した。
+- `npm run compile`: 成功。拡張機能とWebviewのWebpackビルドが完了した。
+- `npm run lint`: 成功。
+- `npm test`: compile-tests、Webpack build、lintは成功したが、VS Codeテストランタイムの取得時に `getaddrinfo ENOTFOUND update.code.visualstudio.com` となり、テスト本体は実行できなかった。
+- `npm run test:e2e`: 拡張機能ビルドとE2E TypeScript型検査は成功した。既存E2E fixtureがWindows専用のため、このLinux環境では6ケースすべてが実行前に停止した。Windows環境で再実行が必要。

@@ -36,9 +36,9 @@
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Add the optional exact-match label condition and stable candidate-label collection from all valid Issues to `IssueSearchOptions` and `IssueStore.list()` in `src/issueStore.ts`
-- [ ] T006 [US1] Add selected-label state, validate label-filter messages, pass the condition to IssueStore, and include candidates and selected value in list snapshots in `src/issueView.ts`
-- [ ] T007 [US1] Add an accessible single-label selector, clear option, selected-condition indication, and filter-aware empty state to the Issue list in `src/webview/issue.ts`
+- [x] T005 [US1] Add the optional exact-match label condition and stable candidate-label collection from all valid Issues to `IssueSearchOptions` and `IssueStore.list()` in `src/issueStore.ts`
+- [x] T006 [US1] Add selected-label state, validate label-filter messages, pass the condition to IssueStore, and include candidates and selected value in list snapshots in `src/issueView.ts`
+- [x] T007 [US1] Add an accessible single-label selector, clear option, selected-condition indication, and filter-aware empty state to the Issue list in `src/webview/issue.ts`
 
 **Checkpoint**: The label selector independently filters and clears the Issue list without modifying Issue Markdown.
 
@@ -52,13 +52,13 @@
 
 ### Tests for User Story 2
 
-- [ ] T008 [P] [US2] Add IssueStore tests for AND-combination of query, state, and label, case-sensitive label matching, and unchanged Issue records in `src/test/issueStore.test.ts`
-- [ ] T009 [P] [US2] Add the P2 sidebar E2E case for combined conditions, label-only clearing, case differences, and unchanged Markdown contents and `updatedAt` in `e2e/issue-sidebar.spec.ts`
+- [x] T008 [P] [US2] Add IssueStore tests for AND-combination of query, state, and label, case-sensitive label matching, and unchanged Issue records in `src/test/issueStore.test.ts`
+- [x] T009 [P] [US2] Add the P2 sidebar E2E case for combined conditions, label-only clearing, case differences, and unchanged Markdown contents and `updatedAt` in `e2e/issue-sidebar.spec.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T010 [P] [US2] Preserve the selected label when validating and applying query or state changes, and verify all conditions are passed together to IssueStore in `src/issueView.ts`
-- [ ] T011 [P] [US2] Include the current label value in search and state filter messages, and preserve query and state when selecting or clearing the label in `src/webview/issue.ts`
+- [x] T010 [P] [US2] Preserve the selected label when validating and applying query or state changes, and verify all conditions are passed together to IssueStore in `src/issueView.ts`
+- [x] T011 [P] [US2] Include the current label value in search and state filter messages, and preserve query and state when selecting or clearing the label in `src/webview/issue.ts`
 
 **Checkpoint**: Query, state, and label conditions compose without resetting one another or writing to Issue files.
 
@@ -72,12 +72,12 @@
 
 ### Tests for User Story 3
 
-- [ ] T012 [P] [US3] Add the P3 E2E case that opens an Issue from a filtered list and verifies the selected label, query/state, and result set after returning in `e2e/issue-sidebar.spec.ts`
-- [ ] T013 [P] [US3] Add IssueView coverage that selecting an Issue and handling `backToList` retains the current label and other filter state in `src/test/issueView.test.ts`
+- [x] T012 [P] [US3] Add the P3 E2E case that opens an Issue from a filtered list and verifies the selected label, query/state, and result set after returning in `e2e/issue-sidebar.spec.ts`
+- [x] T013 [P] [US3] Add IssueView coverage that selecting an Issue and handling `backToList` retains the current label and other filter state in `src/test/issueView.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] Preserve the selected label and all other list conditions across Issue selection, refresh, and `backToList` snapshots in `src/issueView.ts`
+- [x] T014 [US3] Preserve the selected label and all other list conditions across Issue selection, refresh, and `backToList` snapshots in `src/issueView.ts`
 
 **Checkpoint**: Returning from detail restores the same active filters and visible Issues.
 
@@ -87,7 +87,7 @@
 
 **Purpose**: Validate the complete feature and record actual results.
 
-- [ ] T015 Run `npm test`, `npm run test:e2e`, and `npm run lint`; record actual commands, outcomes, and any environment limitation in `specs/014-label-filter/quickstart.md`
+- [x] T015 Run `npm test`, `npm run test:e2e`, and `npm run lint`; record actual commands, outcomes, and any environment limitation in `specs/014-label-filter/quickstart.md`
 
 ---
 
@@ -152,4 +152,4 @@ Then implement T005, T006, and T007 in dependency order.
 - `[P]` means tasks touch distinct files and have no dependency on incomplete tasks.
 - `[US1]`, `[US2]`, and `[US3]` map directly to the feature specification.
 - Every task includes a repository-relative target path.
-- Tests must be added before production changes in each story.
+- Tests were added before production changes in each story. Automated test execution remains subject to the environment limitations recorded in `quickstart.md`.

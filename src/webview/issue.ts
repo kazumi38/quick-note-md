@@ -46,6 +46,8 @@ interface Snapshot {
 	closedCount: number;
 	query: string;
 	stateFilter: 'all' | 'open' | 'closed';
+	labelFilter?: string;
+	labelOptions: string[];
 	selectedIssueId?: number;
 	selectedIssue?: WebviewSelectedIssue;
 	draft?: WebviewDraft;
@@ -99,17 +101,22 @@ function listView(): string {
 			<option value="all" ${data.stateFilter === 'all' ? 'selected' : ''}>すべて (${data.openCount + data.closedCount})</option>
 			<option value="open" ${data.stateFilter === 'open' ? 'selected' : ''}>Open (${data.openCount})</option>
 			<option value="closed" ${data.stateFilter === 'closed' ? 'selected' : ''}>Closed (${data.closedCount})</option>
+		</select>
+		<label class="sr-only" for="issue-label-filter">ラベル</label><select id="issue-label-filter" aria-label="ラベルで絞り込む">
+			<option value="" ${data.labelFilter === undefined ? 'selected' : ''}>すべてのラベル</option>
+			${data.labelOptions.map(label => `<option value="${escapeHtml(label)}" ${data.labelFilter === label ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
 		</select>`;
 	const rows = data.issues.map(issue => `<button class="issue-list-row" data-action="select" data-id="${issue.id}" data-revision="${data.revision}" aria-label="Issue #${issue.id} ${escapeHtml(issue.title)}を開く">
 		<strong>${escapeHtml(issue.title)}</strong><span class="issue-list-meta">#${issue.id} · ${issue.state === 'open' ? 'Open' : 'Closed'} · コメント ${issue.commentCount}</span>
 		<span class="issue-label-list">${issue.labels.map(label => `<span class="label-chip">${escapeHtml(label)}</span>`).join('')}</span>
 	</button>`).join('');
-	const noResults = data.issues.length ? '' : `<p class="issue-empty">${data.query ? '検索結果がありません。' : 'Issueはまだありません。'}</p>`;
+	const noResults = data.issues.length ? '' : `<p class="issue-empty">${data.openCount + data.closedCount === 0 ? 'Issueはまだありません。' : '検索結果がありません。'}</p>`;
+	const selectedLabel = data.labelFilter === undefined ? '' : `<p class="issue-filter-selection" role="status">選択中のラベル: ${escapeHtml(data.labelFilter)}</p>`;
 	const invalid = data.invalid.map(item => `<p class="warning" role="alert">Issue #${item.issueId} は読み取り専用です: ${escapeHtml(item.error)}</p>`).join('');
 	const draftNotice = data.draft?.issueId
 		? `<button class="issue-draft-notice" data-action="select" data-id="${data.draft.issueId}" data-revision="${data.revision}">Issue #${data.draft.issueId} に未保存の下書きがあります。再開</button>` : '';
 	return `<header class="issue-toolbar"><h1>Issues</h1><button class="issue-primary" data-action="create">新規Issue</button></header>${draftNotice}
-		<section class="issue-list-tools">${filters}</section>${invalid}<section class="issue-list" aria-label="Issue一覧">${rows}${noResults}</section>`;
+		<section class="issue-list-tools">${filters}</section>${selectedLabel}${invalid}<section class="issue-list" aria-label="Issue一覧">${rows}${noResults}</section>`;
 }
 
 function markdownArea(value: string, action: string, label: string): string {
@@ -279,7 +286,16 @@ root.addEventListener('change', event => {
 	const target = event.target;
 	if (!(target instanceof HTMLSelectElement)) { return; }
 	if (target.id === 'issue-filter') {
-		post({ kind: 'setFilter', query: snapshot?.query ?? '', stateFilter: target.value });
+		post({
+			kind: 'setFilter', query: snapshot?.query ?? '', stateFilter: target.value,
+			label: snapshot?.labelFilter ?? '',
+		});
+	}
+	if (target.id === 'issue-label-filter') {
+		post({
+			kind: 'setFilter', query: snapshot?.query ?? '', stateFilter: snapshot?.stateFilter ?? 'all',
+			label: target.value,
+		});
 	}
 	if (target.dataset.field === 'state') { saveField('state', target.value); }
 });
@@ -401,6 +417,7 @@ root.addEventListener('input', event => {
 		if (searchTimer !== undefined) { clearTimeout(searchTimer); }
 		searchTimer = window.setTimeout(() => post({
 			kind: 'setFilter', query: target.value, stateFilter: snapshot?.stateFilter ?? 'all',
+			label: snapshot?.labelFilter ?? '',
 		}), 150);
 	}
 });

@@ -20,11 +20,13 @@ export interface IssueListResult {
 	invalid: IssueReadResult[];
 	openCount: number;
 	closedCount: number;
+	labels: string[];
 }
 
 export interface IssueSearchOptions {
 	query?: string;
 	state?: IssueStateFilter;
+	label?: string;
 }
 
 export interface CreateIssueInput {
@@ -305,14 +307,17 @@ export class IssueStore {
 		}
 		const query = options.query?.trim().toLocaleLowerCase();
 		const all = records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id);
+		const labels = [...new Set(all.flatMap(issue => issue.labels.map(label => label.trim()).filter(Boolean)))].sort();
 		const visible = all.filter(issue =>
 			(options.state === undefined || options.state === 'all' || issue.state === options.state)
+			&& (options.label === undefined || issue.labels.some(label => label.trim() === options.label))
 			&& (!query || `${issue.title}\n${issue.bodyMarkdown}`.toLocaleLowerCase().includes(query)));
 		return {
 			issues: visible,
 			invalid,
 			openCount: all.filter(issue => issue.state === 'open').length,
 			closedCount: all.filter(issue => issue.state === 'closed').length,
+			labels,
 		};
 	}
 

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { issueDraftStoreUri, validateIssueViewMessage } from '../issueView';
+import { IssueView, issueDraftStoreUri, validateIssueViewMessage } from '../issueView';
 
 suite('Issue sidebar message validation', () => {
 	test('isolates persisted drafts by workspace without exposing the workspace path', () => {
@@ -51,6 +51,30 @@ suite('Issue sidebar message validation', () => {
 		assert.strictEqual(validateIssueViewMessage({
 			kind: 'setFilter', query: '', stateFilter: 'all', label: 'bug', unexpected: true,
 		}), undefined);
+	});
+
+	test('retains query, state, and label when navigating back to the list', async () => {
+		const view = new IssueView({ subscriptions: [] } as unknown as vscode.ExtensionContext);
+		const internal = view as unknown as {
+			query: string;
+			stateFilter: 'all' | 'open' | 'closed';
+			labelFilter?: string;
+			selectedIssueId?: number;
+			refresh: () => Promise<void>;
+			handleMessage: (value: unknown) => Promise<void>;
+		};
+		internal.query = 'needle';
+		internal.stateFilter = 'closed';
+		internal.labelFilter = 'bug';
+		internal.selectedIssueId = 42;
+		internal.refresh = async () => undefined;
+
+		await internal.handleMessage({ kind: 'backToList' });
+
+		assert.strictEqual(internal.query, 'needle');
+		assert.strictEqual(internal.stateFilter, 'closed');
+		assert.strictEqual(internal.labelFilter, 'bug');
+		assert.strictEqual(internal.selectedIssueId, undefined);
 	});
 
 	test('accepts supported title, label, and comment operations', () => {

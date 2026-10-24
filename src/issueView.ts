@@ -9,7 +9,7 @@ import { renderSafeMarkdown } from './rendering';
 type ViewMessage =
 	| { kind: 'ready' | 'refresh' | 'backToList' }
 	| { kind: 'selectIssue'; issueId: number; snapshotRevision: number }
-	| { kind: 'setFilter'; query: string; stateFilter: IssueStateFilter }
+	| { kind: 'setFilter'; query: string; stateFilter: IssueStateFilter; label?: string }
 	| { kind: 'startCreate' }
 	| { kind: 'draftChanged'; draftId: string; revision: number; field: IssueDraftField; value: string | string[]; issueId?: number; commentId?: string }
 	| { kind: 'createIssue'; operationId: string; draftId: string; revision: number; title: string; bodyMarkdown: string }
@@ -31,6 +31,8 @@ interface ViewSnapshot {
 	closedCount: number;
 	query: string;
 	stateFilter: IssueStateFilter;
+	labelFilter?: string;
+	labelOptions: string[];
 	selectedIssueId?: number;
 	selectedIssue?: IssueRecord & { bodyHtml: string; commentHtml: string[] };
 	draft?: IssueDraft & { title?: string; bodyMarkdown?: string };
@@ -74,9 +76,10 @@ function parseMessage(value: unknown): ViewMessage | undefined {
 				&& Number.isSafeInteger(message.snapshotRevision) && (message.snapshotRevision as number) >= 0
 				? message as ViewMessage : undefined;
 		case 'setFilter':
-			return onlyKeys(message, ['kind', 'query', 'stateFilter'])
+			return onlyKeys(message, ['kind', 'query', 'stateFilter', 'label'])
 				&& typeof message.query === 'string' && message.query.length <= 1000
 				&& ['all', 'open', 'closed'].includes(message.stateFilter as string)
+				&& (message.label === undefined || typeof message.label === 'string' && message.label.length <= 1000)
 				? message as ViewMessage : undefined;
 		case 'draftChanged':
 			return onlyKeys(message, ['kind', 'draftId', 'revision', 'field', 'value', 'issueId', 'commentId'])
@@ -134,6 +137,7 @@ export class IssueView implements vscode.WebviewViewProvider, vscode.Disposable 
 	private revision = 0;
 	private query = '';
 	private stateFilter: IssueStateFilter = 'all';
+	private labelFilter: string | undefined;
 	private selectedIssueId: number | undefined;
 	private activeDraft: IssueDraft | undefined;
 	private readonly operations = new Map<string, OperationResult>();
@@ -203,10 +207,13 @@ export class IssueView implements vscode.WebviewViewProvider, vscode.Disposable 
 				this.post({
 					kind: 'snapshot', revision: this.revision, state: 'loading', issues: [], invalid: [],
 					openCount: 0, closedCount: 0, query: this.query, stateFilter: this.stateFilter,
+					labelFilter: this.labelFilter, labelOptions: [],
 				});
 			}
 			await this.initialize();
-			const data = await this.store!.list({ query: this.query, state: this.stateFilter });
+			const data = await this.store!.list({
+				query: this.query, state: this.stateFilter, label: this.labelFilter,
+			});
 			const allIds = new Set(data.issues.map(issue => issue.id));
 			if (this.selectedIssueId && !allIds.has(this.selectedIssueId)) { this.selectedIssueId = undefined; }
 			const selected = this.selectedIssueId ? await this.store!.read(this.selectedIssueId) : undefined;
@@ -253,6 +260,8 @@ export class IssueView implements vscode.WebviewViewProvider, vscode.Disposable 
 				closedCount: data.closedCount,
 				query: this.query,
 				stateFilter: this.stateFilter,
+				labelFilter: this.labelFilter,
+				labelOptions: data.labels,
 				selectedIssueId: this.selectedIssueId,
 				selectedIssue,
 				draft: draftPayload,
@@ -269,6 +278,8 @@ export class IssueView implements vscode.WebviewViewProvider, vscode.Disposable 
 				closedCount: 0,
 				query: this.query,
 				stateFilter: this.stateFilter,
+				labelFilter: this.labelFilter,
+				labelOptions: [],
 				error: error instanceof Error ? error.message : 'Issue一覧を読み込めませんでした。',
 			});
 			await vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Issueの初期化に失敗しました。');
@@ -299,6 +310,7 @@ export class IssueView implements vscode.WebviewViewProvider, vscode.Disposable 
 				case 'setFilter':
 					this.query = message.query;
 					this.stateFilter = message.stateFilter;
+					this.labelFilter = message.label || undefined;
 					await this.refresh();
 					break;
 				case 'startCreate':
