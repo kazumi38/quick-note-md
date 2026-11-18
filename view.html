@@ -64,9 +64,10 @@ main { flex: 1; min-height: 0; overflow: hidden; }
 .dot.s-1 { background: var(--plan); }
 .dot.s-2 { background: var(--progress); }
 .dot.s-3 { background: var(--done); }
+.dot.s-4 { background: linear-gradient(135deg, transparent 43%, #6b7280 43% 57%, transparent 57%) #fff; border: 1px solid #6b7280; }
 
 /* カンバン */
-.kanban { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 12px; height: 100%; padding: 12px; overflow: auto; }
+.kanban { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 12px; height: 100%; padding: 12px; overflow: auto; }
 .col { display: flex; flex-direction: column; min-height: 0; background: #e5e7eb; border-radius: 8px; border: 2px solid transparent; }
 .col.over { border-color: var(--accent); }
 .col h2 { display: flex; align-items: center; font-size: 13px; margin: 0; padding: 8px 10px; }
@@ -84,6 +85,8 @@ main { flex: 1; min-height: 0; overflow: hidden; }
 .card .crumbs { font-size: 11px; color: var(--muted); }
 .card .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .blocked { color: #b45309; }
+.col[data-status="4"] .card { opacity: .7; }
+.col[data-status="4"] .card .title, .wbs tr.skip .c-name .label { text-decoration: line-through; color: var(--muted); }
 
 /* WBS */
 .wbs-wrap { height: 100%; overflow: auto; background: var(--panel); }
@@ -162,6 +165,7 @@ dialog#detail::backdrop { background: rgba(17, 24, 39, .4); }
 	<button type="button" class="btn primary" id="openBtn">フォルダを開く</button>
 	<button type="button" class="btn" id="reconnectBtn" hidden></button>
 	<button type="button" class="btn" id="refreshBtn" disabled title="Markdownファイルを読み直します">↻ 更新</button>
+	<button type="button" class="btn" id="newBtn" disabled title="タスクまたは項目（フォルダ）を追加します">＋ 新規追加</button>
 	<div class="seg" role="group" aria-label="表示切り替え">
 		<button type="button" class="btn" id="viewKanban" aria-pressed="true">カンバン</button>
 		<button type="button" class="btn" id="viewWbs" aria-pressed="false">WBS</button>
@@ -178,6 +182,7 @@ dialog#detail::backdrop { background: rgba(17, 24, 39, .4); }
 		<span><i class="dot s-1"></i>着手予定</span>
 		<span><i class="dot s-2"></i>進行中</span>
 		<span><i class="dot s-3"></i>完了</span>
+		<span><i class="dot s-4"></i>対応不要（バーなし）</span>
 	</span>
 	<span class="spacer"></span>
 	<span id="msg" role="status" aria-live="polite"></span>
@@ -197,6 +202,10 @@ dialog#detail::backdrop { background: rgba(17, 24, 39, .4); }
 			<input id="dName" aria-label="名前" required>
 		</header>
 		<p class="muted" id="dPath"></p>
+		<div class="fields" id="dCreate">
+			<label>種類<select id="dKind"><option value="task">タスク</option><option value="group">項目（フォルダ）</option></select></label>
+			<label>追加先<select id="dParent"></select></label>
+		</div>
 		<div class="fields" id="dFields">
 			<label>状態<select id="dStatus"></select></label>
 			<label>担当者<input id="dAssignee" list="assigneeList" autocomplete="off"></label>
@@ -206,7 +215,7 @@ dialog#detail::backdrop { background: rgba(17, 24, 39, .4); }
 			<label class="wide">依存関係（タスクIDをカンマ区切り。例: 01-02-01-01）<input id="dDepends" autocomplete="off"></label>
 		</div>
 		<p class="muted" id="dMeta"></p>
-		<label class="bodyLabel">内容（Markdown。保存するとファイル本文を上書きします）
+		<label class="bodyLabel">内容（Markdown。保存するとファイル本文に書き込みます）
 			<textarea id="dBody" spellcheck="false"></textarea>
 		</label>
 		<footer>
@@ -222,8 +231,12 @@ dialog#detail::backdrop { background: rgba(17, 24, 39, .4); }
 (() => {
 'use strict';
 
-const STATUSES = ['着手前', '着手予定', '進行中', '完了'];
+const STATUSES = ['着手前', '着手予定', '進行中', '完了', '対応不要'];
 const DONE = 3;
+const SKIP = 4;
+const GROUP_TYPES = ['大項目', '中項目', '小項目'];
+/** 完了・対応不要は、これ以上作業しない状態として扱う。 */
+const isClosed = (statusIndex) => statusIndex === DONE || statusIndex === SKIP;
 const HOURS_PER_DAY = 5;
 const MAX_DAYS = 730;
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
@@ -236,6 +249,7 @@ const state = {
 	source: null, // { root, tasksDir, dataDir } | null (読み取り専用時)
 	readOnly: false,
 	entries: [],
+	dirs: new Map(), // tasks からの相対パス → ディレクトリハンドル
 	dataEntries: [],
 	nodes: [],
 	tasks: [],
@@ -381,11 +395,12 @@ function patchDocument(text, changes, body) {
 
 /* ---------- ファイル読み書き ---------- */
 
-async function walk(dir, path, out) {
+async function walk(dir, path, out, dirs) {
+	dirs?.set(path.join('/'), dir);
 	for await (const [name, handle] of dir.entries()) {
 		if (name.startsWith('.') || name === 'node_modules') { continue; }
 		if (handle.kind === 'directory') {
-			await walk(handle, [...path, name], out);
+			await walk(handle, [...path, name], out, dirs);
 		} else if (/\.md$/i.test(name)) {
 			out.push({ path: [...path, name], handle, text: await (await handle.getFile()).text() });
 		}
@@ -395,9 +410,11 @@ async function reload() {
 	const { tasksDir, dataDir } = state.source;
 	const entries = [];
 	const dataEntries = [];
-	await walk(tasksDir, [], entries);
+	const dirs = new Map();
+	await walk(tasksDir, [], entries, dirs);
 	if (dataDir) { await walk(dataDir, [], dataEntries); }
 	state.entries = entries;
+	state.dirs = dirs;
 	state.dataEntries = dataEntries;
 	rebuild();
 }
@@ -413,6 +430,7 @@ async function openRoot(root) {
 	state.scrollToToday = true;
 	await reload();
 	$('refreshBtn').disabled = false;
+	$('newBtn').disabled = false;
 	$('reconnectBtn').hidden = true;
 	setMsg(`「${root.name}」を読み込みました（${state.tasks.length}件）`);
 }
@@ -428,7 +446,9 @@ async function loadFromFileList(files) {
 	state.entries = hasTasksDir ? under('tasks') : all;
 	state.dataEntries = hasTasksDir ? under('data') : [];
 	state.source = null;
+	state.dirs = new Map();
 	state.readOnly = true;
+	$('newBtn').disabled = true;
 	state.scrollToToday = true;
 	rebuild();
 	setMsg('読み取り専用で表示中です（更新には Chrome / Edge が必要です）');
@@ -520,6 +540,7 @@ const isOff = (date, assignee) => isWeekend(date) || state.holidays.has(date) ||
 function scheduleTask(task) {
 	task.barStart = '';
 	task.barEnd = '';
+	if (task.statusIndex === SKIP) { return; }
 	if (!task.start) {
 		if (task.completed) { task.barStart = task.barEnd = task.completed; }
 		return;
@@ -564,6 +585,9 @@ function rebuild() {
 		return group;
 	};
 
+	for (const path of state.dirs.keys()) {
+		if (path) { groupOf(path.split('/')); }
+	}
 	for (const entry of state.entries) {
 		const segs = entry.path;
 		const file = segs[segs.length - 1];
@@ -666,7 +690,7 @@ function autoScopes() {
 	if (active.size) { return active; }
 	let best = null;
 	for (const task of state.tasks) {
-		if (task.statusIndex === DONE) { continue; }
+		if (isClosed(task.statusIndex)) { continue; }
 		if (!best || (task.start || '9999-99-99') < (best.start || '9999-99-99')) { best = task; }
 	}
 	return new Set(best ? [scopeOf(best)] : []);
@@ -724,7 +748,7 @@ function render() {
 		return;
 	}
 	if (!state.tasks.length) {
-		main.innerHTML = '<div class="empty"><p>タスクの Markdown が見つかりません。<code>tasks/01-大項目/01-タスク.md</code> のように配置してください。</p></div>';
+		main.innerHTML = '<div class="empty"><p>タスクの Markdown が見つかりません。<code>tasks/01-大項目/01-タスク.md</code> のように配置するか、「＋ 新規追加」で作成してください。</p></div>';
 		return;
 	}
 	if (isKanban) { renderKanban(main); } else { renderWbs(main); }
@@ -732,14 +756,14 @@ function render() {
 }
 
 const hours = (n) => (n === null ? '-' : String(n));
-const unfinishedDeps = (task) => task.deps.filter((d) => d.task && d.task.statusIndex !== DONE);
+const unfinishedDeps = (task) => task.deps.filter((d) => d.task && !isClosed(d.task.statusIndex));
 
 function renderKanban(main) {
 	const filter = scopeFilter();
 	$('scopeHint').textContent = filter.hint;
 	const tasks = state.tasks.filter((t) => matchAssignee(t) && filter.test(t));
 	const card = (t) => {
-		const waiting = unfinishedDeps(t);
+		const waiting = isClosed(t.statusIndex) ? [] : unfinishedDeps(t);
 		return `<article class="card" role="button" tabindex="0" draggable="${!state.readOnly}" data-i="${t.index}">
 			<div class="title"><span class="chapter">${esc(t.chapter)}</span> ${esc(t.name)}</div>
 			<div class="crumbs">${esc(t.ancestors.map((g) => g.name).join(' › '))}</div>
@@ -818,12 +842,12 @@ function renderWbs(main) {
 			return `<td class="d${c.cls}${inBar ? ` bar s-${node.statusIndex}` : ''}"></td>`;
 		}).join('');
 		const deps = node.deps.map((d) => {
-			const late = d.task && d.task.statusIndex !== DONE && node.barStart && d.task.barEnd && node.barStart <= d.task.barEnd;
+			const late = d.task && !isClosed(d.task.statusIndex) && node.barStart && d.task.barEnd && node.barStart <= d.task.barEnd;
 			return late
 				? `<span class="violation" title="依存先（${esc(d.task.name)}）の終了見込より前に着手予定です">${esc(d.task.chapter)}⚠</span>`
 				: esc(d.task ? d.task.chapter : `?${d.ref}`);
 		}).join(', ');
-		return `<tr class="task" data-i="${node.index}">${num}<td class="c-name" ${indent}><div class="inner">
+		return `<tr class="task${node.statusIndex === SKIP ? ' skip' : ''}" data-i="${node.index}">${num}<td class="c-name" ${indent}><div class="inner">
 				<button type="button" class="link label" data-open title="${esc(node.name)}">${esc(node.name)}</button>
 				<span class="swap"><button type="button" data-move="-1" aria-label="上のタスクと入れ替え" title="上のタスクと入れ替え"${at > 0 ? lock : ' disabled'}>▲</button><button type="button" data-move="1" aria-label="下のタスクと入れ替え" title="下のタスクと入れ替え"${at < siblings.length - 1 ? lock : ' disabled'}>▼</button></span></div></td>
 			<td>${chip(node.assignee)}</td>
@@ -915,16 +939,20 @@ function openStatusMenu(task, x, y) {
 /* ---------- 詳細ダイアログ ---------- */
 
 function formValues() {
-	return ['dName', 'dStatus', 'dAssignee', 'dEstimate', 'dActual', 'dStart', 'dDepends', 'dBody'].map((id) => $(id).value);
+	return ['dName', 'dKind', 'dParent', 'dStatus', 'dAssignee', 'dEstimate', 'dActual', 'dStart', 'dDepends', 'dBody'].map((id) => $(id).value);
 }
+const statusOptions = () => STATUSES.map((label, i) => `<option value="${i}">${esc(label)}</option>`).join('');
 function openDetail(node) {
 	const isTask = node.kind === 'task';
 	state.detail = node;
+	state.creating = false;
+	$('dCreate').hidden = true;
+	$('dSave').textContent = '保存';
 	$('dChapter').textContent = node.chapter;
 	$('dName').value = node.name;
 	$('dPath').textContent = `tasks/${isTask ? node.path : `${node.path}/README.md`}`;
 	$('dFields').hidden = !isTask;
-	$('dStatus').innerHTML = STATUSES.map((label, i) => `<option value="${i}">${esc(label)}</option>`).join('');
+	$('dStatus').innerHTML = statusOptions();
 	$('dStatus').value = String(isTask ? node.statusIndex : 0);
 	$('dAssignee').value = isTask ? node.assignee : '';
 	$('dEstimate').value = isTask && node.estimate !== null ? node.estimate : '';
@@ -940,13 +968,118 @@ function openDetail(node) {
 	$('detail').showModal();
 	$('dBody').focus();
 }
+
+/* ---------- 新規追加 ---------- */
+
+/** 種類に応じて追加先の候補を出し直す。タスクは項目の中、項目は小項目の深さまで。 */
+function updateCreateForm() {
+	const isTask = $('dKind').value === 'task';
+	const groups = state.nodes.filter((n) => n.kind === 'group' && (isTask || n.depth <= 1));
+	const current = $('dParent').value;
+	$('dParent').innerHTML = (isTask ? '' : '<option value="">tasks 直下（大項目として追加）</option>')
+		+ groups.map((g) => `<option value="${esc(g.path)}">${'　'.repeat(g.depth)}${esc(`${g.chapter} ${g.name}`)}</option>`).join('');
+	const wanted = [current, state.lastParent].find((path) => path !== undefined && [...$('dParent').options].some((o) => o.value === path));
+	if (wanted !== undefined) { $('dParent').value = wanted; }
+	$('dFields').hidden = !isTask;
+	$('dSave').disabled = $('dParent').options.length === 0;
+	$('dPath').textContent = $('dParent').options.length
+		? (isTask ? '追加先のフォルダに「番号-名前.md」を作成します。' : '追加先に「番号-名前」フォルダと README.md を作成します。')
+		: '先に項目（フォルダ）を追加してください。';
+}
+function openCreate() {
+	if (!state.source || state.readOnly) { return; }
+	state.detail = null;
+	state.creating = true;
+	$('dCreate').hidden = false;
+	$('dChapter').textContent = '新規';
+	$('dSave').textContent = '追加';
+	for (const id of ['dName', 'dAssignee', 'dEstimate', 'dActual', 'dStart', 'dDepends', 'dBody']) { $(id).value = ''; }
+	$('dStatus').innerHTML = statusOptions();
+	$('dStatus').value = '0';
+	$('dMeta').textContent = '';
+	$('dKind').value = state.nodes.some((n) => n.kind === 'group') ? 'task' : 'group';
+	$('dParent').innerHTML = '';
+	updateCreateForm();
+	state.detailSnapshot = JSON.stringify(formValues());
+	$('detail').showModal();
+	$('dName').focus();
+}
+/** ファイル名に使えない文字を除いた名前。正式な名前はフロントマターの name に残す。 */
+const safeFileName = (name) => name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-').replace(/\s+/g, ' ').replace(/^[\s.-]+|[\s.-]+$/g, '').slice(0, 60);
+/** 追加先の実フォルダを読み、同じ種類（フォルダ / Markdown）の最大番号 + 1 で空いている名前を決める。 */
+async function nextName(dir, base, isTask) {
+	const used = new Set();
+	let max = 0;
+	for await (const [name, handle] of dir.entries()) {
+		used.add(name.toLowerCase());
+		if ((handle.kind === 'file') === isTask && (!isTask || /\.md$/i.test(name))) { max = Math.max(max, Number(numOf(name) || 0)); }
+	}
+	for (let n = max + 1; ; n++) {
+		const candidate = `${pad(n)}-${base}${isTask ? '.md' : ''}`;
+		if (!used.has(candidate.toLowerCase())) { return candidate; }
+	}
+}
+function createItem() {
+	const isTask = $('dKind').value === 'task';
+	const name = $('dName').value.trim();
+	const parentPath = $('dParent').value;
+	const parentDir = state.dirs.get(parentPath);
+	if (!name || !parentDir || state.readOnly) { return; }
+	const segs = parentPath ? parentPath.split('/') : [];
+	if (isTask ? !parentPath : segs.length >= GROUP_TYPES.length) { return; }
+	const changes = { name };
+	if (isTask) {
+		const to = Number($('dStatus').value);
+		const parent = state.nodes.find((n) => n.kind === 'group' && n.path === parentPath);
+		const chain = [];
+		for (let group = parent; group && group.parent; group = group.parent) { chain.unshift(group); }
+		Object.assign(changes, { status: STATUSES[to], type: 'タスク' });
+		chain.slice(0, CATEGORY_KEYS.length).forEach((group, i) => { changes[CATEGORY_KEYS[i]] = group.name; });
+		Object.assign(changes, {
+			estimate_hours: $('dEstimate').value.trim(),
+			actual_hours: $('dActual').value.trim(),
+			assignee: $('dAssignee').value.trim(),
+			start_date: $('dStart').value || (to === 2 ? today() : ''),
+			updated_date: today(),
+			completed_date: to === DONE ? nowStamp() : '',
+			depends_on: $('dDepends').value.split(/[,、]/).map((d) => d.trim()).filter(Boolean)
+		});
+	} else {
+		changes.type = GROUP_TYPES[segs.length];
+	}
+	const text = patchDocument('', changes, $('dBody').value);
+	enqueue(async () => {
+		const created = await nextName(parentDir, safeFileName(name) || (isTask ? 'タスク' : '項目'), isTask);
+		let dir = parentDir;
+		const path = [...segs, created];
+		if (!isTask) {
+			dir = await parentDir.getDirectoryHandle(created, { create: true });
+			state.dirs.set(path.join('/'), dir);
+			path.push('README.md');
+		}
+		const handle = await dir.getFileHandle(path[path.length - 1], { create: true });
+		const writable = await handle.createWritable();
+		await writable.write(text);
+		await writable.close();
+		state.entries.push({ path, handle, text });
+		state.lastParent = isTask ? parentPath : path.slice(0, -1).join('/');
+		closeDetail(true);
+		rebuild();
+		const task = isTask && state.tasks.find((t) => t.path === path.join('/'));
+		const hiddenNow = task && !(matchAssignee(task) && (state.view !== 'kanban' || scopeFilter().test(task)));
+		setMsg(`「${name}」を追加しました（tasks/${path.join('/')}）${hiddenNow ? '。現在の絞り込みでは表示されません' : ''}`);
+	});
+}
+
 const detailDirty = () => JSON.stringify(formValues()) !== state.detailSnapshot;
 function closeDetail(force) {
 	if (!force && detailDirty() && !window.confirm('保存していない変更があります。破棄して閉じますか？')) { return; }
 	state.detail = null;
+	state.creating = false;
 	$('detail').close();
 }
 function saveDetail() {
+	if (state.creating) { createItem(); return; }
 	const node = state.detail;
 	if (!node || state.readOnly) { return; }
 	const changes = {};
@@ -1006,6 +1139,8 @@ $('refreshBtn').addEventListener('click', () => {
 	queue = queue.then(reload).then(() => setMsg(`更新しました（${state.tasks.length}件）`))
 		.catch((error) => { console.error(error); setMsg(`更新に失敗しました: ${error.message || error}`, true); });
 });
+$('newBtn').addEventListener('click', openCreate);
+$('dKind').addEventListener('change', updateCreateForm);
 $('viewKanban').addEventListener('click', () => { state.view = 'kanban'; render(); });
 $('viewWbs').addEventListener('click', () => { state.view = 'wbs'; state.scrollToToday = true; render(); });
 $('scopeSel').addEventListener('change', (event) => { state.scope = event.target.value; render(); });
