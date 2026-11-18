@@ -23,6 +23,10 @@ QuickNoteMD の Issue ビューを初めて開く際、旧機能からの移行�
 
 Issue 保存先、Issue 下書き、global storage のその他のデータは削除しません。削除先が Issue 保存先と重複する場合、または symlink・I/O エラーを検出した場合は削除と Issue の読み書きを停止します。旧設定値は移行のために読み取りますが、以後の設定項目としては提供しません。
 
+## タスク管理（カンバン / WBS）
+
+リポジトリ直下の `view.html` を Chrome / Edge で開くと、`tasks/` 配下の Markdown（フロントマター）をカンバンと WBS で表示・更新できます。拡張機能とは独立した単一 HTML で、VSIX には含めません。フォルダ構成とフロントマターの書式は [tasks/README.md](tasks/README.md) を参照してください。
+
 ## 開発と検証
 
 ```powershell

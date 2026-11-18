@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>タスク管理 (カンバン / WBS)</title>
+<style>
+:root {
+	--border: #d1d5db;
+	--muted: #6b7280;
+	--bg: #f3f4f6;
+	--panel: #ffffff;
+	--accent: #2563eb;
+	--plan: #7dd3fc;
+	--progress: #a3e635;
+	--done: #9ca3af;
+	--num-w: 72px;
+	--name-w: 280px;
+	--head-h: 22px;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+	display: flex; flex-direction: column;
+	font: 13px/1.5 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+	color: #111827; background: var(--bg);
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+.toolbar {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+	padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.toolbar h1 { font-size: 15px; margin: 0 8px 0 0; }
+.toolbar label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.toolbar select { max-width: 260px; }
+.btn, .toolbar select {
+	padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: #fff;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.seg { display: inline-flex; }
+.seg .btn { border-radius: 0; margin-left: -1px; }
+.seg .btn:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.seg .btn:last-child { border-radius: 0 6px 6px 0; }
+.seg .btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.spacer { flex: 1; }
+#msg { color: var(--muted); max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#msg.error { color: #b91c1c; }
+.muted { color: var(--muted); }
+.warnings { margin: 0; padding: 4px 12px; background: #fffbeb; border-bottom: 1px solid #fde68a; }
+.warnings ul { margin: 4px 0; padding-left: 20px; }
+main { flex: 1; min-height: 0; overflow: hidden; }
+.empty { padding: 48px 24px; text-align: center; color: var(--muted); }
+.empty p { margin: 8px 0; }
+
+.chip {
+	display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px;
+	white-space: nowrap; border: 1px solid rgba(0, 0, 0, .12);
+}
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.dot.s-0 { background: repeating-linear-gradient(45deg, #bae6fd 0 3px, #f0f9ff 3px 6px); border: 1px solid #7dd3fc; }
+.dot.s-1 { background: var(--plan); }
+.dot.s-2 { background: var(--progress); }
+.dot.s-3 { background: var(--done); }
+
+/* カンバン */
+.kanban { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 12px; height: 100%; padding: 12px; overflow: auto; }
+.col { display: flex; flex-direction: column; min-height: 0; background: #e5e7eb; border-radius: 8px; border: 2px solid transparent; }
+.col.over { border-color: var(--accent); }
+.col h2 { display: flex; align-items: center; font-size: 13px; margin: 0; padding: 8px 10px; }
+.col .count { margin-left: auto; color: var(--muted); font-weight: normal; }
+.cards { flex: 1; overflow-y: auto; padding: 0 8px 8px; display: flex; flex-direction: column; gap: 8px; }
+.card {
+	background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+	cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+}
+.card[draggable="true"] { cursor: grab; }
+.card.dragging { opacity: .5; }
+.card:focus-visible, .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.card .title { font-weight: 600; word-break: break-word; }
+.card .chapter, td.c-num { font-variant-numeric: tabular-nums; color: var(--accent); }
+.card .crumbs { font-size: 11px; color: var(--muted); }
+.card .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.blocked { color: #b45309; }
+
+/* WBS */
+.wbs-wrap { height: 100%; overflow: auto; background: var(--panel); }
+table.wbs { border-collapse: separate; border-spacing: 0; }
+.wbs th, .wbs td {
+	border-right: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb;
+	padding: 0 6px; height: 26px; white-space: nowrap; background-color: var(--panel);
+}
+.wbs thead th { position: sticky; top: 0; z-index: 2; background-color: #f9fafb; font-weight: 600; height: var(--head-h); line-height: var(--head-h); }
+.wbs thead tr:nth-child(2) th { top: var(--head-h); }
+.wbs thead tr:nth-child(3) th { top: calc(var(--head-h) * 2); }
+.wbs thead th.month { text-align: left; }
+.wbs .c-num { position: sticky; left: 0; z-index: 1; width: var(--num-w); min-width: var(--num-w); max-width: var(--num-w); }
+.wbs .c-name {
+	position: sticky; left: var(--num-w); z-index: 1; width: var(--name-w); min-width: var(--name-w); max-width: var(--name-w);
+	border-right: 2px solid var(--border);
+}
+.wbs thead .c-num, .wbs thead .c-name { z-index: 3; }
+.wbs .c-name .inner { display: flex; align-items: center; gap: 4px; }
+.wbs .c-name .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wbs tr.group td { background-color: #f9fafb; font-weight: 600; }
+.wbs td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.link { border: 0; background: none; padding: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+.link:hover { text-decoration: underline; }
+.swap { display: inline-flex; }
+.swap button { border: 0; background: none; padding: 0 2px; font-size: 10px; color: var(--muted); }
+.swap button:hover:not(:disabled) { color: var(--accent); }
+.status-btn { border: 1px solid var(--border); border-radius: 999px; background: #fff; padding: 0 8px; font-size: 12px; }
+.wbs th.d, .wbs td.d { padding: 0; width: 24px; min-width: 24px; text-align: center; font-weight: normal; font-size: 12px; }
+.wbs tr.task td.d { cursor: cell; }
+.wbs .d.sat { background-color: #eff6ff; }
+.wbs .d.sun, .wbs .d.hol { background-color: #fef2f2; }
+.wbs th.d.sat { color: #2563eb; }
+.wbs th.d.sun, .wbs th.d.hol { color: #dc2626; }
+.wbs td.d.leave { background-image: repeating-linear-gradient(135deg, #d1d5db 0 3px, transparent 3px 7px); }
+.wbs th.d.today { background-color: #ef4444; color: #fff; }
+.wbs td.d.today { box-shadow: inset 2px 0 0 #ef4444; }
+.wbs td.bar { background-repeat: no-repeat; background-position: center; background-size: 100% 62%; }
+.wbs td.bar.s-0 { background-image: repeating-linear-gradient(45deg, #bae6fd 0 4px, #f0f9ff 4px 8px); }
+.wbs td.bar.s-1 { background-image: linear-gradient(var(--plan), var(--plan)); }
+.wbs td.bar.s-2 { background-image: linear-gradient(var(--progress), var(--progress)); }
+.wbs td.bar.s-3 { background-image: linear-gradient(var(--done), var(--done)); }
+.wbs td.gbar { background-image: linear-gradient(#475569, #475569); background-repeat: no-repeat; background-position: center; background-size: 100% 22%; }
+.violation { color: #b91c1c; font-weight: 600; }
+.legend { display: inline-flex; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 12px; }
+.legend span { display: inline-flex; align-items: center; }
+
+#statusMenu {
+	position: fixed; z-index: 20; background: #fff; border: 1px solid var(--border); border-radius: 6px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, .18); padding: 4px; display: flex; flex-direction: column; min-width: 140px;
+}
+#statusMenu[hidden] { display: none; }
+#statusMenu button { display: flex; align-items: center; border: 0; background: none; padding: 5px 10px; border-radius: 4px; text-align: left; }
+#statusMenu button:hover:not(:disabled), #statusMenu button:focus-visible { background: #eff6ff; outline: none; }
+#statusMenu button[aria-checked="true"] { font-weight: 700; }
+
+dialog#detail { width: min(760px, 94vw); max-height: 92vh; border: 1px solid var(--border); border-radius: 10px; padding: 0; }
+dialog#detail::backdrop { background: rgba(17, 24, 39, .4); }
+#detailForm { display: flex; flex-direction: column; gap: 10px; padding: 16px; max-height: 92vh; }
+#detailForm header { display: flex; align-items: center; gap: 8px; }
+#dChapter { color: var(--accent); font-weight: 700; }
+#dName { flex: 1; font-size: 15px; font-weight: 600; }
+#detailForm input, #detailForm select, #detailForm textarea { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; min-width: 0; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; }
+.fields label, .bodyLabel { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+.fields label.wide { grid-column: 1 / -1; }
+.bodyLabel { flex: 1; min-height: 0; }
+#dBody { flex: 1; min-height: 240px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, "Yu Gothic", monospace; color: #111827; }
+#detailForm p { margin: 0; font-size: 12px; word-break: break-all; }
+#detailForm footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+	<h1>タスク管理</h1>
+	<button type="button" class="btn primary" id="openBtn">フォルダを開く</button>
+	<button type="button" class="btn" id="reconnectBtn" hidden></button>
+	<button type="button" class="btn" id="refreshBtn" disabled title="Markdownファイルを読み直します">↻ 更新</button>
+	<div class="seg" role="group" aria-label="表示切り替え">
+		<button type="button" class="btn" id="viewKanban" aria-pressed="true">カンバン</button>
+		<button type="button" class="btn" id="viewWbs" aria-pressed="false">WBS</button>
+	</div>
+	<label id="scopeLabel">範囲
+		<select id="scopeSel"></select>
+	</label>
+	<label>担当者
+		<select id="assigneeSel"></select>
+	</label>
+	<span class="muted" id="scopeHint"></span>
+	<span class="legend" id="legend" hidden>
+		<span><i class="dot s-0"></i>着手前</span>
+		<span><i class="dot s-1"></i>着手予定</span>
+		<span><i class="dot s-2"></i>進行中</span>
+		<span><i class="dot s-3"></i>完了</span>
+	</span>
+	<span class="spacer"></span>
+	<span id="msg" role="status" aria-live="polite"></span>
+</div>
+<details class="warnings" id="warnings" hidden>
+	<summary></summary>
+	<ul></ul>
+</details>
+<main id="main"></main>
+
+<div id="statusMenu" role="menu" aria-label="状態を変更" hidden></div>
+
+<dialog id="detail" aria-labelledby="dName">
+	<form id="detailForm">
+		<header>
+			<span id="dChapter"></span>
+			<input id="dName" aria-label="名前" required>
+		</header>
+		<p class="muted" id="dPath"></p>
+		<div class="fields" id="dFields">
+			<label>状態<select id="dStatus"></select></label>
+			<label>担当者<input id="dAssignee" list="assigneeList" autocomplete="off"></label>
+			<label>見積もり時間 (h)<input id="dEstimate" type="number" min="0" step="0.5"></label>
+			<label>作業時間 (h)<input id="dActual" type="number" min="0" step="0.5"></label>
+			<label>着手予定日<input id="dStart" type="date"></label>
+			<label class="wide">依存関係（タスクIDをカンマ区切り。例: 01-02-01-01）<input id="dDepends" autocomplete="off"></label>
+		</div>
+		<p class="muted" id="dMeta"></p>
+		<label class="bodyLabel">内容（Markdown。保存するとファイル本文を上書きします）
+			<textarea id="dBody" spellcheck="false"></textarea>
+		</label>
+		<footer>
+			<button type="button" class="btn" id="dClose">閉じる</button>
+			<button type="submit" class="btn primary" id="dSave">保存</button>
+		</footer>
+	</form>
+	<datalist id="assigneeList"></datalist>
+</dialog>
+<input type="file" id="fallbackInput" webkitdirectory multiple hidden>
+
+<script>
+(() => {
+'use strict';
+
+const STATUSES = ['着手前', '着手予定', '進行中', '完了'];
+const DONE = 3;
+const HOURS_PER_DAY = 5;
+const MAX_DAYS = 730;
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+const CATEGORY_KEYS = ['category_large', 'category_medium', 'category_small'];
+const STORE_KEY = 'quick-note-md-view';
+const canWrite = typeof window.showDirectoryPicker === 'function';
+
+const $ = (id) => document.getElementById(id);
+const state = {
+	source: null, // { root, tasksDir, dataDir } | null (読み取り専用時)
+	readOnly: false,
+	entries: [],
+	dataEntries: [],
+	nodes: [],
+	tasks: [],
+	holidays: new Map(),
+	leaves: new Map(),
+	warnings: [],
+	view: 'kanban',
+	scope: 'auto',
+	assignee: '',
+	detail: null,
+	menuNode: null,
+	scrollToToday: true
+};
+
+/* ---------- 汎用 ---------- */
+
+const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => (
+	{ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+const pad = (n) => String(n).padStart(2, '0');
+const toDate = (s) => new Date(`${s}T00:00:00Z`);
+const fmtDate = (d) => d.toISOString().slice(0, 10);
+const addDays = (s, n) => { const d = toDate(s); d.setUTCDate(d.getUTCDate() + n); return fmtDate(d); };
+const dayOfWeek = (s) => toDate(s).getUTCDay();
+const today = () => { const n = new Date(); return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`; };
+const nowStamp = () => { const n = new Date(); return `${today()} ${pad(n.getHours())}:${pad(n.getMinutes())}`; };
+function isDate(s) {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) { return false; }
+	const d = toDate(s);
+	return !Number.isNaN(d.getTime()) && fmtDate(d) === s;
+}
+function dateOf(value) {
+	const m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/.exec(String(value ?? '').trim());
+	if (!m) { return ''; }
+	const s = `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+	return isDate(s) ? s : '';
+}
+const str = (value) => (Array.isArray(value) ? value.join(', ') : String(value ?? '')).trim();
+function num(value) {
+	const s = str(value);
+	const n = s === '' ? NaN : Number(s);
+	return Number.isFinite(n) ? n : null;
+}
+const numOf = (seg) => (/^(\d+)/.exec(seg) || [])[1] || '';
+const stripNum = (seg) => seg.replace(/^\d+[-_.\s]*/, '') || seg;
+const assigneeHue = (name) => { let h = 0; for (const ch of name) { h = (h * 31 + ch.codePointAt(0)) % 360; } return h; };
+const chip = (name) => (name
+	? `<span class="chip" style="background:hsl(${assigneeHue(name)} 75% 88%)">${esc(name)}</span>`
+	: '<span class="chip muted">未割当</span>');
+
+function setMsg(text, isError) {
+	const el = $('msg');
+	el.textContent = text;
+	el.title = text;
+	el.classList.toggle('error', Boolean(isError));
+}
+
+/* ---------- フロントマター ---------- */
+
+function splitDoc(text) {
+	const bom = text.startsWith('\uFEFF') ? '\uFEFF' : '';
+	const src = bom ? text.slice(1) : text;
+	const eol = src.includes('\r\n') ? '\r\n' : '\n';
+	const lines = src.split(/\r?\n/);
+	if (lines[0].trimEnd() === '---') {
+		const end = lines.findIndex((line, i) => i > 0 && line.trimEnd() === '---');
+		if (end > 0) {
+			return { bom, eol, fm: lines.slice(1, end), body: lines.slice(end + 1).join(eol) };
+		}
+	}
+	return { bom, eol, fm: null, body: lines.join(eol) };
+}
+const displayBody = (text) => splitDoc(text).body.replace(/\r\n/g, '\n').replace(/^\n+/, '');
+
+function parseScalar(raw) {
+	let s = raw.trim();
+	if (s.length >= 2 && s[0] === '"' && s.endsWith('"')) {
+		return s.slice(1, -1).replace(/\\(["\\])/g, '$1');
+	}
+	if (s.length >= 2 && s[0] === "'" && s.endsWith("'")) {
+		return s.slice(1, -1).replace(/''/g, "'");
+	}
+	s = s.replace(/\s+#.*$/, '');
+	return s === '~' || s === 'null' ? '' : s;
+}
+function parseFrontmatter(lines) {
+	const data = {};
+	let listKey = null;
+	for (const line of lines) {
+		if (!line.trim() || line.trim().startsWith('#')) { continue; }
+		const item = /^\s*-(?:\s+(.*))?$/.exec(line);
+		if (item && listKey) {
+			if (!Array.isArray(data[listKey])) { data[listKey] = []; }
+			data[listKey].push(parseScalar(item[1] || ''));
+			continue;
+		}
+		const kv = /^([^\s:#-][^:]*?)\s*:(?:\s+(.*))?$/.exec(line);
+		if (!kv) { continue; }
+		const value = (kv[2] || '').trim();
+		listKey = null;
+		if (value === '' || value.startsWith('#')) {
+			data[kv[1]] = '';
+			listKey = kv[1];
+		} else if (value.startsWith('[') && value.endsWith(']')) {
+			data[kv[1]] = value.slice(1, -1).split(',').map(parseScalar).filter(Boolean);
+		} else {
+			data[kv[1]] = parseScalar(value);
+		}
+	}
+	return data;
+}
+function formatScalar(value, inList) {
+	const s = String(value).replace(/\s*\r?\n\s*/g, ' ');
+	const risky = s !== s.trim() || /: |:$| #|^[-?:,[\]{}#&*!|>'"%@`]/.test(s)
+		|| /^(true|false|null|yes|no|on|off|~)$/i.test(s) || (inList && /[,[\]]/.test(s));
+	return risky ? `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"` : s;
+}
+function setKey(lines, key, value) {
+	const text = Array.isArray(value)
+		? (value.length ? `[${value.map((v) => formatScalar(v, true)).join(', ')}]` : '')
+		: formatScalar(value ?? '');
+	const line = text === '' ? `${key}:` : `${key}: ${text}`;
+	const start = lines.findIndex((l) => l.startsWith(key) && /^\s*:/.test(l.slice(key.length)));
+	if (start < 0) { lines.push(line); return; }
+	let end = start + 1;
+	while (end < lines.length && (/^\s+\S/.test(lines[end]) || /^-(\s|$)/.test(lines[end]))) { end++; }
+	lines.splice(start, end - start, line);
+}
+/** 変更キーの行だけを書き換える。body 指定時のみ本文を上書きする。 */
+function patchDocument(text, changes, body) {
+	const doc = splitDoc(text);
+	const fm = doc.fm ? doc.fm.slice() : [];
+	for (const [key, value] of Object.entries(changes)) { setKey(fm, key, value); }
+	const hasFm = Boolean(doc.fm) || fm.length > 0;
+	let out = doc.bom + (hasFm ? ['---', ...fm, '---'].join(doc.eol) + doc.eol : '');
+	if (body === undefined) {
+		return out + (!doc.fm && hasFm && doc.body ? doc.eol : '') + doc.body;
+	}
+	const trimmed = body.replace(/\r\n/g, '\n').replace(/^\n+/, '').replace(/\s+$/, '');
+	if (trimmed) { out += (hasFm ? doc.eol : '') + trimmed.replace(/\n/g, doc.eol) + doc.eol; }
+	return out;
+}
+
+/* ---------- ファイル読み書き ---------- */
+
+async function walk(dir, path, out) {
+	for await (const [name, handle] of dir.entries()) {
+		if (name.startsWith('.') || name === 'node_modules') { continue; }
+		if (handle.kind === 'directory') {
+			await walk(handle, [...path, name], out);
+		} else if (/\.md$/i.test(name)) {
+			out.push({ path: [...path, name], handle, text: await (await handle.getFile()).text() });
+		}
+	}
+}
+async function reload() {
+	const { tasksDir, dataDir } = state.source;
+	const entries = [];
+	const dataEntries = [];
+	await walk(tasksDir, [], entries);
+	if (dataDir) { await walk(dataDir, [], dataEntries); }
+	state.entries = entries;
+	state.dataEntries = dataEntries;
+	rebuild();
+}
+async function openRoot(root) {
+	let tasksDir = root;
+	let dataDir = null;
+	try {
+		tasksDir = await root.getDirectoryHandle('tasks');
+		try { dataDir = await root.getDirectoryHandle('data'); } catch { /* data は任意 */ }
+	} catch { /* tasks フォルダ自体が選択された */ }
+	state.source = { root, tasksDir, dataDir };
+	state.readOnly = false;
+	state.scrollToToday = true;
+	await reload();
+	$('refreshBtn').disabled = false;
+	$('reconnectBtn').hidden = true;
+	setMsg(`「${root.name}」を読み込みました（${state.tasks.length}件）`);
+}
+async function loadFromFileList(files) {
+	const all = [];
+	for (const file of files) {
+		const segs = file.webkitRelativePath.split('/').slice(1);
+		if (!/\.md$/i.test(file.name) || segs.some((s) => s.startsWith('.') || s === 'node_modules')) { continue; }
+		all.push({ path: segs, handle: null, text: await file.text() });
+	}
+	const hasTasksDir = all.some((e) => e.path[0] === 'tasks' && e.path.length > 1);
+	const under = (dir) => all.filter((e) => e.path[0] === dir && e.path.length > 1).map((e) => ({ ...e, path: e.path.slice(1) }));
+	state.entries = hasTasksDir ? under('tasks') : all;
+	state.dataEntries = hasTasksDir ? under('data') : [];
+	state.source = null;
+	state.readOnly = true;
+	state.scrollToToday = true;
+	rebuild();
+	setMsg('読み取り専用で表示中です（更新には Chrome / Edge が必要です）');
+}
+
+function handleStore(mode, run) {
+	return new Promise((resolve, reject) => {
+		const open = indexedDB.open(STORE_KEY, 1);
+		open.onupgradeneeded = () => open.result.createObjectStore('kv');
+		open.onerror = () => reject(open.error);
+		open.onsuccess = () => {
+			const tx = open.result.transaction('kv', mode);
+			const request = run(tx.objectStore('kv'));
+			tx.oncomplete = () => { open.result.close(); resolve(request.result); };
+			tx.onerror = () => { open.result.close(); reject(tx.error); };
+		};
+	});
+}
+async function rememberRoot(root) {
+	try { await handleStore('readwrite', (store) => store.put(root, 'root')); } catch { /* 記憶できなくても動作する */ }
+}
+
+let queue = Promise.resolve();
+/** 書き込みを直列化し、失敗時はメッセージ表示のうえ再描画する。 */
+function enqueue(job) {
+	queue = queue.then(job).catch((error) => {
+		console.error(error);
+		setMsg(`保存に失敗しました: ${error.message || error}`, true);
+		rebuild();
+	});
+	return queue;
+}
+/** 最新のファイル内容に変更を当てて保存する。false は利用者が上書きを取り消した場合。 */
+async function saveEntry(entry, changes, body) {
+	if (!entry.handle || state.readOnly) { throw new Error('読み取り専用です'); }
+	const latest = await (await entry.handle.getFile()).text();
+	if (body !== undefined && displayBody(latest) !== displayBody(entry.text)
+		&& !window.confirm('このファイルの本文は読み込み後に別の場所で変更されています。上書きしますか？')) {
+		return false;
+	}
+	const next = patchDocument(latest, changes, body);
+	if (next !== latest) {
+		const writable = await entry.handle.createWritable();
+		await writable.write(next);
+		await writable.close();
+	}
+	entry.text = next;
+	return true;
+}
+
+/* ---------- モデル構築 ---------- */
+
+function parseDateLines(text) {
+	const out = [];
+	for (const line of text.split(/\r?\n/)) {
+		const m = /^\s*[-*]\s+(\d{4}-\d{2}-\d{2})(?:\s*(?:〜|~|\.\.)\s*(\d{4}-\d{2}-\d{2}))?\s*(.*)$/.exec(line);
+		if (!m || !isDate(m[1])) { continue; }
+		const end = m[2] && isDate(m[2]) && m[2] >= m[1] ? m[2] : m[1];
+		for (let d = m[1], n = 0; d <= end && n < 400; d = addDays(d, 1), n++) {
+			out.push({ date: d, text: m[3].trim() });
+		}
+	}
+	return out;
+}
+function loadCalendarData() {
+	state.holidays = new Map();
+	state.leaves = new Map();
+	for (const entry of state.dataEntries) {
+		const file = entry.path[entry.path.length - 1].toLowerCase();
+		if (entry.path.length !== 1) { continue; }
+		if (file === 'holidays.md') {
+			for (const row of parseDateLines(entry.text)) { state.holidays.set(row.date, row.text || '休日'); }
+		} else if (file === 'leaves.md') {
+			for (const row of parseDateLines(entry.text)) {
+				const m = /^([^:：]+)[:：]\s*(.*)$/.exec(row.text) || /^(\S+)\s*(.*)$/.exec(row.text);
+				if (!m) { continue; }
+				const name = m[1].trim();
+				if (!state.leaves.has(name)) { state.leaves.set(name, new Map()); }
+				state.leaves.get(name).set(row.date, m[2].trim() || '休み');
+			}
+		}
+	}
+}
+const isWeekend = (date) => { const w = dayOfWeek(date); return w === 0 || w === 6; };
+const isLeave = (date, assignee) => Boolean(assignee && state.leaves.get(assignee)?.has(date));
+const isOff = (date, assignee) => isWeekend(date) || state.holidays.has(date) || isLeave(date, assignee);
+
+/** 1日5時間稼働として、着手予定日から稼働日だけを数えてバーの範囲を決める。 */
+function scheduleTask(task) {
+	task.barStart = '';
+	task.barEnd = '';
+	if (!task.start) {
+		if (task.completed) { task.barStart = task.barEnd = task.completed; }
+		return;
+	}
+	if (task.statusIndex === DONE && task.completed) {
+		task.barStart = task.completed < task.start ? task.completed : task.start;
+		task.barEnd = task.completed;
+		return;
+	}
+	let remaining = Math.max(1, Math.ceil((task.estimate || 0) / HOURS_PER_DAY));
+	let date = task.start;
+	let last = task.start;
+	for (let guard = 0; remaining > 0 && guard < 3000; guard++, date = addDays(date, 1)) {
+		if (!isOff(date, task.assignee)) { remaining--; last = date; }
+	}
+	task.barStart = task.start;
+	task.barEnd = last;
+}
+
+function compareNodes(a, b) {
+	return (a.sortStart || '9999-99-99').localeCompare(b.sortStart || '9999-99-99')
+		|| (a.order ?? Infinity) - (b.order ?? Infinity)
+		|| (a.num === '' ? Infinity : Number(a.num)) - (b.num === '' ? Infinity : Number(b.num))
+		|| a.seg.localeCompare(b.seg);
+}
+
+function rebuild() {
+	const warnings = [];
+	loadCalendarData();
+	const root = { kind: 'group', depth: -1, seg: '', path: '', name: '', chapter: '', children: [], parent: null };
+	const groups = new Map([['', root]]);
+	const groupOf = (segs) => {
+		const key = segs.join('/');
+		let group = groups.get(key);
+		if (!group) {
+			const parent = groupOf(segs.slice(0, -1));
+			const seg = segs[segs.length - 1];
+			group = { kind: 'group', depth: segs.length - 1, seg, path: key, name: stripNum(seg), num: numOf(seg), children: [], parent, entry: null, fm: {} };
+			groups.set(key, group);
+			parent.children.push(group);
+		}
+		return group;
+	};
+
+	for (const entry of state.entries) {
+		const segs = entry.path;
+		const file = segs[segs.length - 1];
+		const doc = splitDoc(entry.text);
+		const fm = doc.fm ? parseFrontmatter(doc.fm) : {};
+		if (/^readme\.md$/i.test(file)) {
+			if (segs.length > 1) {
+				const group = groupOf(segs.slice(0, -1));
+				group.entry = entry;
+				group.fm = fm;
+				group.name = str(fm.name) || group.name;
+			}
+			continue;
+		}
+		const parent = groupOf(segs.slice(0, -1));
+		const path = segs.join('/');
+		const statusIndex = STATUSES.indexOf(str(fm.status));
+		if (str(fm.status) && statusIndex < 0) { warnings.push(`${path}: 状態「${str(fm.status)}」は不明なため「着手前」として扱います`); }
+		if (str(fm.start_date) && !dateOf(fm.start_date)) { warnings.push(`${path}: 着手予定日「${str(fm.start_date)}」を日付として読めません`); }
+		const depends = Array.isArray(fm.depends_on) ? fm.depends_on : str(fm.depends_on).split(/[,、]/);
+		const task = {
+			kind: 'task', depth: segs.length - 1, seg: file, path, parent, entry, fm,
+			num: numOf(file),
+			name: str(fm.name) || stripNum(file.replace(/\.md$/i, '')),
+			statusIndex: Math.max(0, statusIndex),
+			assignee: str(fm.assignee),
+			estimate: num(fm.estimate_hours),
+			actual: num(fm.actual_hours),
+			start: dateOf(fm.start_date),
+			completed: dateOf(fm.completed_date),
+			order: num(fm.order),
+			depends: depends.map((d) => String(d).trim()).filter(Boolean),
+			taskId: segs.map((s) => numOf(s) || s.replace(/\.md$/i, '')).join('-')
+		};
+		task.sortStart = task.start;
+		let ancestor = parent;
+		const chain = [];
+		while (ancestor.parent) { chain.unshift(ancestor); ancestor = ancestor.parent; }
+		task.ancestors = chain;
+		CATEGORY_KEYS.forEach((key, i) => {
+			const value = str(fm[key]);
+			const group = chain[i];
+			if (value && (!group || ![group.name, group.seg, stripNum(group.seg)].includes(value))) {
+				warnings.push(`${path}: ${key}「${value}」がフォルダ構成（${group ? group.seg : 'なし'}）と一致しません。表示はフォルダ構成に従います`);
+			}
+		});
+		parent.children.push(task);
+	}
+
+	const finalize = (group) => {
+		for (const child of group.children) {
+			if (child.kind === 'group') { finalize(child); } else { scheduleTask(child); }
+		}
+		const min = (key) => group.children.map((c) => c[key]).filter(Boolean).sort()[0] || '';
+		group.sortStart = min('sortStart');
+		group.barStart = min('barStart');
+		group.barEnd = group.children.map((c) => c.barEnd).filter(Boolean).sort().pop() || '';
+		group.children.sort(compareNodes);
+	};
+	finalize(root);
+
+	// 章番号は着手予定日の早い順に、階層ごとに上から振る
+	const nodes = [];
+	const number = (group) => {
+		group.children.forEach((child, i) => {
+			child.chapter = group.chapter ? `${group.chapter}.${i + 1}` : String(i + 1);
+			child.index = nodes.push(child) - 1;
+			if (child.kind === 'group') { number(child); }
+		});
+	};
+	number(root);
+
+	const tasks = nodes.filter((n) => n.kind === 'task');
+	const lookup = new Map();
+	for (const task of tasks) {
+		lookup.set(task.taskId, task);
+		lookup.set(task.path, task);
+		lookup.set(task.path.replace(/\.md$/i, ''), task);
+	}
+	for (const task of tasks) {
+		task.deps = task.depends.map((ref) => ({ ref, task: lookup.get(ref) || null }));
+		for (const dep of task.deps) {
+			if (!dep.task) { warnings.push(`${task.path}: 依存先「${dep.ref}」が見つかりません`); }
+		}
+	}
+
+	state.nodes = nodes;
+	state.tasks = tasks;
+	state.warnings = warnings;
+	render();
+}
+
+/* ---------- フィルタ ---------- */
+
+const matchAssignee = (task) => state.assignee === '' || (state.assignee === 'none' ? !task.assignee : state.assignee === `a:${task.assignee}`);
+/** カンバンの範囲単位: 中項目があれば中項目、なければ大項目。 */
+const scopeOf = (task) => task.ancestors[1] || task.ancestors[0] || null;
+function autoScopes() {
+	const active = new Set(state.tasks.filter((t) => t.statusIndex === 2).map(scopeOf));
+	if (active.size) { return active; }
+	let best = null;
+	for (const task of state.tasks) {
+		if (task.statusIndex === DONE) { continue; }
+		if (!best || (task.start || '9999-99-99') < (best.start || '9999-99-99')) { best = task; }
+	}
+	return new Set(best ? [scopeOf(best)] : []);
+}
+function scopeFilter() {
+	if (state.scope === 'all') { return { test: () => true, hint: '' }; }
+	if (state.scope === 'auto') {
+		const scopes = autoScopes();
+		const names = [...scopes].filter(Boolean).map((g) => `${g.chapter} ${g.name}`);
+		return { test: (task) => scopes.has(scopeOf(task)), hint: names.length ? `表示中: ${names.join(' / ')}` : '' };
+	}
+	const path = state.scope.slice(2);
+	return { test: (task) => task.ancestors.some((g) => g.path === path), hint: '' };
+}
+
+function renderFilters() {
+	const groups = state.nodes.filter((n) => n.kind === 'group' && n.depth <= 1);
+	const loaded = state.nodes.length > 0;
+	if (loaded && state.scope.startsWith('g:') && !groups.some((g) => `g:${g.path}` === state.scope)) { state.scope = 'auto'; }
+	$('scopeSel').innerHTML = '<option value="auto">進行中／直近の中項目</option><option value="all">すべて</option>'
+		+ groups.map((g) => `<option value="${esc(`g:${g.path}`)}">${g.depth ? '　' : ''}${esc(`${g.chapter} ${g.name}`)}</option>`).join('');
+	$('scopeSel').value = state.scope;
+
+	const names = [...new Set(state.tasks.map((t) => t.assignee).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+	if (loaded && state.assignee.startsWith('a:') && !names.includes(state.assignee.slice(2))) { state.assignee = ''; }
+	$('assigneeSel').innerHTML = '<option value="">全員</option>'
+		+ names.map((n) => `<option value="${esc(`a:${n}`)}">${esc(n)}</option>`).join('')
+		+ '<option value="none">未割当</option>';
+	$('assigneeSel').value = state.assignee;
+	$('assigneeList').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
+}
+
+/* ---------- 描画 ---------- */
+
+function render() {
+	closeStatusMenu();
+	renderFilters();
+	const isKanban = state.view === 'kanban';
+	$('viewKanban').setAttribute('aria-pressed', String(isKanban));
+	$('viewWbs').setAttribute('aria-pressed', String(!isKanban));
+	$('scopeLabel').hidden = !isKanban;
+	$('legend').hidden = isKanban;
+	$('scopeHint').textContent = '';
+
+	const box = $('warnings');
+	box.hidden = state.warnings.length === 0;
+	box.querySelector('summary').textContent = `⚠ ${state.warnings.length}件の注意`;
+	box.querySelector('ul').innerHTML = state.warnings.map((w) => `<li>${esc(w)}</li>`).join('');
+
+	const main = $('main');
+	if (!state.source && !state.readOnly) {
+		main.innerHTML = `<div class="empty"><p>「フォルダを開く」で <code>tasks</code> フォルダを含むフォルダ（リポジトリのルート）を選択してください。</p>
+			<p>タスクの実体は <code>tasks/</code> 配下の Markdown で、この画面は表示と更新だけを行います。</p>
+			${canWrite ? '' : '<p>このブラウザはファイルの書き込みに対応していないため、読み取り専用で表示します（更新には Chrome / Edge が必要です）。</p>'}</div>`;
+		return;
+	}
+	if (!state.tasks.length) {
+		main.innerHTML = '<div class="empty"><p>タスクの Markdown が見つかりません。<code>tasks/01-大項目/01-タスク.md</code> のように配置してください。</p></div>';
+		return;
+	}
+	if (isKanban) { renderKanban(main); } else { renderWbs(main); }
+	try { localStorage.setItem(STORE_KEY, JSON.stringify({ view: state.view, scope: state.scope, assignee: state.assignee })); } catch { /* 保存できなくても動作する */ }
+}
+
+const hours = (n) => (n === null ? '-' : String(n));
+const unfinishedDeps = (task) => task.deps.filter((d) => d.task && d.task.statusIndex !== DONE);
+
+function renderKanban(main) {
+	const filter = scopeFilter();
+	$('scopeHint').textContent = filter.hint;
+	const tasks = state.tasks.filter((t) => matchAssignee(t) && filter.test(t));
+	const card = (t) => {
+		const waiting = unfinishedDeps(t);
+		return `<article class="card" role="button" tabindex="0" draggable="${!state.readOnly}" data-i="${t.index}">
+			<div class="title"><span class="chapter">${esc(t.chapter)}</span> ${esc(t.name)}</div>
+			<div class="crumbs">${esc(t.ancestors.map((g) => g.name).join(' › '))}</div>
+			<div class="meta">${chip(t.assignee)}<span title="作業時間 / 見積もり時間">⏱ ${esc(hours(t.actual))} / ${esc(hours(t.estimate))}h</span>
+				${t.start ? `<span title="着手予定日">▶ ${esc(t.start.slice(5))}</span>` : ''}
+				${t.statusIndex === DONE && t.completed ? `<span title="完了日">✔ ${esc(t.completed.slice(5))}</span>` : ''}
+				${waiting.length ? `<span class="blocked" title="未完了の依存タスク">待ち: ${esc(waiting.map((d) => d.task.chapter).join(', '))}</span>` : ''}
+			</div></article>`;
+	};
+	main.innerHTML = `<div class="kanban">${STATUSES.map((label, i) => {
+		const list = tasks.filter((t) => t.statusIndex === i);
+		return `<section class="col" data-status="${i}" aria-label="${esc(label)}">
+			<h2><i class="dot s-${i}"></i>${esc(label)}<span class="count">${list.length}</span></h2>
+			<div class="cards">${list.map(card).join('')}</div></section>`;
+	}).join('')}</div>`;
+}
+
+function calendarDays() {
+	const starts = state.tasks.map((t) => t.barStart).filter(Boolean).sort();
+	const ends = state.tasks.map((t) => t.barEnd).filter(Boolean).sort();
+	const min = starts[0] || today();
+	const max = ends.length ? ends[ends.length - 1] : addDays(min, 27);
+	const first = addDays(min, -((dayOfWeek(min) + 6) % 7));
+	const last = addDays(max, 7);
+	const days = [];
+	for (let d = first; d <= last && days.length < MAX_DAYS; d = addDays(d, 1)) { days.push(d); }
+	return { days, clipped: days[days.length - 1] < last };
+}
+
+function renderWbs(main) {
+	const previous = main.querySelector('.wbs-wrap');
+	const scroll = previous ? { left: previous.scrollLeft, top: previous.scrollTop } : null;
+	const { days, clipped } = calendarDays();
+	const now = today();
+	const columns = days.map((date) => {
+		const w = dayOfWeek(date);
+		const holiday = state.holidays.get(date);
+		const cls = (holiday ? ' hol' : w === 0 ? ' sun' : w === 6 ? ' sat' : '') + (date === now ? ' today' : '');
+		return { date, w, holiday, cls, off: Boolean(holiday) || w === 0 || w === 6 };
+	});
+
+	let months = '';
+	for (let i = 0; i < columns.length;) {
+		const key = columns[i].date.slice(0, 7);
+		let span = 0;
+		while (i + span < columns.length && columns[i + span].date.startsWith(key)) { span++; }
+		months += `<th class="month" colspan="${span}">${Number(key.slice(0, 4))}年${Number(key.slice(5))}月</th>`;
+		i += span;
+	}
+	const fixed = ['担当', '状態', '見積h', '実績h', '着手予定', '終了見込', '依存'].map((h) => `<th rowspan="3">${h}</th>`).join('');
+	const head = `<thead><tr><th rowspan="3" class="c-num">番号</th><th rowspan="3" class="c-name">項目 / タスク</th>${fixed}${months}</tr>
+		<tr>${columns.map((c) => `<th class="d${c.cls}" data-date="${c.date}"${c.holiday ? ` title="${esc(c.holiday)}"` : ''}>${Number(c.date.slice(8))}</th>`).join('')}</tr>
+		<tr>${columns.map((c) => `<th class="d${c.cls}">${WEEKDAYS[c.w]}</th>`).join('')}</tr></thead>`;
+
+	const visible = (node) => (node.kind === 'task' ? matchAssignee(node) : node.children.some(visible));
+	const rows = state.nodes.filter(visible).map((node) => {
+		const indent = `style="padding-left:${6 + node.depth * 14}px"`;
+		const num = `<td class="c-num">${esc(node.chapter)}</td>`;
+		if (node.kind === 'group') {
+			const cells = columns.map((c) => `<td class="d${c.cls}${node.barStart && c.date >= node.barStart && c.date <= node.barEnd ? ' gbar' : ''}"></td>`).join('');
+			const label = node.entry
+				? `<button type="button" class="link label" data-open title="${esc(node.seg)}/README.md を開く">${esc(node.name)}</button>`
+				: `<span class="label">${esc(node.name)}</span>`;
+			return `<tr class="group" data-i="${node.index}">${num}<td class="c-name" ${indent}><div class="inner">${label}</div></td>
+				<td colspan="4"></td><td>${esc(node.sortStart)}</td><td>${esc(node.barEnd)}</td><td></td>${cells}</tr>`;
+		}
+		const siblings = node.parent.children.filter((c) => c.kind === 'task' && matchAssignee(c));
+		const at = siblings.indexOf(node);
+		const lock = state.readOnly ? ' disabled' : '';
+		const leaves = state.leaves.get(node.assignee);
+		const cells = columns.map((c) => {
+			if (!c.off && leaves?.has(c.date)) {
+				return `<td class="d leave${c.cls}" title="${esc(`${node.assignee} 休み: ${leaves.get(c.date)}`)}"></td>`;
+			}
+			const inBar = !c.off && node.barStart && c.date >= node.barStart && c.date <= node.barEnd;
+			return `<td class="d${c.cls}${inBar ? ` bar s-${node.statusIndex}` : ''}"></td>`;
+		}).join('');
+		const deps = node.deps.map((d) => {
+			const late = d.task && d.task.statusIndex !== DONE && node.barStart && d.task.barEnd && node.barStart <= d.task.barEnd;
+			return late
+				? `<span class="violation" title="依存先（${esc(d.task.name)}）の終了見込より前に着手予定です">${esc(d.task.chapter)}⚠</span>`
+				: esc(d.task ? d.task.chapter : `?${d.ref}`);
+		}).join(', ');
+		return `<tr class="task" data-i="${node.index}">${num}<td class="c-name" ${indent}><div class="inner">
+				<button type="button" class="link label" data-open title="${esc(node.name)}">${esc(node.name)}</button>
+				<span class="swap"><button type="button" data-move="-1" aria-label="上のタスクと入れ替え" title="上のタスクと入れ替え"${at > 0 ? lock : ' disabled'}>▲</button><button type="button" data-move="1" aria-label="下のタスクと入れ替え" title="下のタスクと入れ替え"${at < siblings.length - 1 ? lock : ' disabled'}>▼</button></span></div></td>
+			<td>${chip(node.assignee)}</td>
+			<td><button type="button" class="status-btn" data-status-menu aria-haspopup="menu"${lock}><i class="dot s-${node.statusIndex}"></i>${esc(STATUSES[node.statusIndex])}</button></td>
+			<td class="r">${esc(hours(node.estimate))}</td><td class="r">${esc(hours(node.actual))}</td>
+			<td>${esc(node.start)}</td><td>${esc(node.barEnd)}</td><td>${deps}</td>${cells}</tr>`;
+	});
+
+	main.innerHTML = `<div class="wbs-wrap"><table class="wbs">${head}<tbody>${rows.join('')}</tbody></table></div>`;
+	if (clipped) { $('scopeHint').textContent = `カレンダーは ${MAX_DAYS} 日分までを表示しています`; }
+	const wrap = main.querySelector('.wbs-wrap');
+	if (scroll && !state.scrollToToday) {
+		wrap.scrollLeft = scroll.left;
+		wrap.scrollTop = scroll.top;
+	} else {
+		const cell = wrap.querySelector(`th.d[data-date="${now}"]`);
+		const sticky = wrap.querySelector('thead .c-num').offsetWidth + wrap.querySelector('thead .c-name').offsetWidth;
+		if (cell && cell.offsetLeft + cell.offsetWidth > wrap.clientWidth) { wrap.scrollLeft = Math.max(0, cell.offsetLeft - sticky - cell.offsetWidth * 3); }
+	}
+	state.scrollToToday = false;
+}
+
+/* ---------- 更新操作 ---------- */
+
+/** WBS では 完了→着手前、着手前→完了 の直接変更を許可しない。 */
+const canMove = (from, to) => !((from === DONE && to === 0) || (from === 0 && to === DONE));
+function statusChanges(task, to) {
+	const changes = { status: STATUSES[to], updated_date: today() };
+	if (to === DONE) {
+		changes.completed_date = nowStamp();
+	} else if (task.statusIndex === DONE || str(task.fm.completed_date)) {
+		changes.completed_date = '';
+	}
+	if (to === 2 && !task.start) { changes.start_date = today(); }
+	return changes;
+}
+function changeStatus(task, to) {
+	if (state.readOnly || task.statusIndex === to) { return; }
+	enqueue(async () => {
+		await saveEntry(task.entry, statusChanges(task, to));
+		rebuild();
+		setMsg(`「${task.name}」を「${STATUSES[to]}」に更新しました`);
+	});
+}
+function swapTask(task, direction) {
+	if (state.readOnly) { return; }
+	const siblings = task.parent.children.filter((c) => c.kind === 'task' && matchAssignee(c));
+	const other = siblings[siblings.indexOf(task) + direction];
+	if (!other) { return; }
+	enqueue(async () => {
+		const stamp = today();
+		if (task.start !== other.start) {
+			// 並び順（章番号）は着手予定日で決まるため、日付を交換する
+			await saveEntry(task.entry, { start_date: other.start, updated_date: stamp });
+			await saveEntry(other.entry, { start_date: task.start, updated_date: stamp });
+			setMsg(`「${task.name}」と「${other.name}」の着手予定日を入れ替えました`);
+		} else {
+			const same = task.parent.children.filter((c) => c.kind === 'task' && c.start === task.start);
+			const a = same.indexOf(task);
+			const b = same.indexOf(other);
+			[same[a], same[b]] = [same[b], same[a]];
+			for (const [i, node] of same.entries()) {
+				if (node.order !== i + 1) { await saveEntry(node.entry, { order: i + 1, updated_date: stamp }); }
+			}
+			setMsg(`「${task.name}」と「${other.name}」の順序を入れ替えました`);
+		}
+		rebuild();
+	});
+}
+
+function closeStatusMenu() {
+	$('statusMenu').hidden = true;
+	state.menuNode = null;
+}
+function openStatusMenu(task, x, y) {
+	if (state.readOnly) { return; }
+	const menu = $('statusMenu');
+	state.menuNode = task;
+	menu.innerHTML = STATUSES.map((label, i) => {
+		const allowed = canMove(task.statusIndex, i);
+		return `<button type="button" role="menuitemradio" data-to="${i}" aria-checked="${i === task.statusIndex}"${allowed ? '' : ' disabled title="この状態へは直接変更できません"'}><i class="dot s-${i}"></i>${esc(label)}</button>`;
+	}).join('');
+	menu.hidden = false;
+	menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 4))}px`;
+	menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 4))}px`;
+	(menu.querySelector('[aria-checked="true"]') || menu.querySelector('button:not(:disabled)')).focus();
+}
+
+/* ---------- 詳細ダイアログ ---------- */
+
+function formValues() {
+	return ['dName', 'dStatus', 'dAssignee', 'dEstimate', 'dActual', 'dStart', 'dDepends', 'dBody'].map((id) => $(id).value);
+}
+function openDetail(node) {
+	const isTask = node.kind === 'task';
+	state.detail = node;
+	$('dChapter').textContent = node.chapter;
+	$('dName').value = node.name;
+	$('dPath').textContent = `tasks/${isTask ? node.path : `${node.path}/README.md`}`;
+	$('dFields').hidden = !isTask;
+	$('dStatus').innerHTML = STATUSES.map((label, i) => `<option value="${i}">${esc(label)}</option>`).join('');
+	$('dStatus').value = String(isTask ? node.statusIndex : 0);
+	$('dAssignee').value = isTask ? node.assignee : '';
+	$('dEstimate').value = isTask && node.estimate !== null ? node.estimate : '';
+	$('dActual').value = isTask && node.actual !== null ? node.actual : '';
+	$('dStart').value = isTask ? node.start : '';
+	$('dDepends').value = isTask ? node.depends.join(', ') : '';
+	$('dMeta').textContent = isTask
+		? `タスクID: ${node.taskId}　更新日: ${str(node.fm.updated_date) || '-'}　完了日: ${str(node.fm.completed_date) || '-'}`
+		: '';
+	$('dBody').value = displayBody(node.entry.text);
+	$('dSave').disabled = state.readOnly;
+	state.detailSnapshot = JSON.stringify(formValues());
+	$('detail').showModal();
+	$('dBody').focus();
+}
+const detailDirty = () => JSON.stringify(formValues()) !== state.detailSnapshot;
+function closeDetail(force) {
+	if (!force && detailDirty() && !window.confirm('保存していない変更があります。破棄して閉じますか？')) { return; }
+	state.detail = null;
+	$('detail').close();
+}
+function saveDetail() {
+	const node = state.detail;
+	if (!node || state.readOnly) { return; }
+	const changes = {};
+	const name = $('dName').value.trim();
+	if (name && name !== node.name) { changes.name = name; }
+	if (node.kind === 'task') {
+		const to = Number($('dStatus').value);
+		if (to !== node.statusIndex) { Object.assign(changes, statusChanges(node, to)); }
+		const assignee = $('dAssignee').value.trim();
+		if (assignee !== node.assignee) { changes.assignee = assignee; }
+		if (num($('dEstimate').value) !== node.estimate) { changes.estimate_hours = $('dEstimate').value.trim(); }
+		if (num($('dActual').value) !== node.actual) { changes.actual_hours = $('dActual').value.trim(); }
+		if ($('dStart').value !== node.start) { changes.start_date = $('dStart').value; }
+		const depends = $('dDepends').value.split(/[,、]/).map((d) => d.trim()).filter(Boolean);
+		if (depends.join(',') !== node.depends.join(',')) { changes.depends_on = depends; }
+	}
+	const original = displayBody(node.entry.text);
+	const body = $('dBody').value.replace(/\r\n/g, '\n') === original ? undefined : $('dBody').value;
+	if (!Object.keys(changes).length && body === undefined) { closeDetail(true); return; }
+	changes.updated_date = today();
+	enqueue(async () => {
+		if (!await saveEntry(node.entry, changes, body)) { return; }
+		closeDetail(true);
+		rebuild();
+		setMsg(`「${name || node.name}」を保存しました`);
+	});
+}
+
+/* ---------- イベント ---------- */
+
+const nodeOf = (el) => { const host = el.closest('[data-i]'); return host ? state.nodes[Number(host.dataset.i)] : null; };
+
+$('openBtn').addEventListener('click', async () => {
+	if (!canWrite) { $('fallbackInput').click(); return; }
+	try {
+		const root = await window.showDirectoryPicker({ mode: 'readwrite' });
+		await openRoot(root);
+		await rememberRoot(root);
+	} catch (error) {
+		if (error.name !== 'AbortError') { console.error(error); setMsg(`読み込みに失敗しました: ${error.message || error}`, true); }
+	}
+});
+$('fallbackInput').addEventListener('change', (event) => {
+	loadFromFileList([...event.target.files]).catch((error) => setMsg(`読み込みに失敗しました: ${error.message || error}`, true));
+});
+$('reconnectBtn').addEventListener('click', async () => {
+	try {
+		const root = state.remembered;
+		if (await root.requestPermission({ mode: 'readwrite' }) === 'granted') { await openRoot(root); }
+	} catch (error) {
+		console.error(error);
+		setMsg(`再接続に失敗しました: ${error.message || error}`, true);
+	}
+});
+$('refreshBtn').addEventListener('click', () => {
+	if (!state.source) { return; }
+	queue = queue.then(reload).then(() => setMsg(`更新しました（${state.tasks.length}件）`))
+		.catch((error) => { console.error(error); setMsg(`更新に失敗しました: ${error.message || error}`, true); });
+});
+$('viewKanban').addEventListener('click', () => { state.view = 'kanban'; render(); });
+$('viewWbs').addEventListener('click', () => { state.view = 'wbs'; state.scrollToToday = true; render(); });
+$('scopeSel').addEventListener('change', (event) => { state.scope = event.target.value; render(); });
+$('assigneeSel').addEventListener('change', (event) => { state.assignee = event.target.value; render(); });
+
+const main = $('main');
+main.addEventListener('click', (event) => {
+	const node = nodeOf(event.target);
+	if (!node) { return; }
+	const move = event.target.closest('[data-move]');
+	const statusButton = event.target.closest('[data-status-menu]');
+	if (move) {
+		swapTask(node, Number(move.dataset.move));
+	} else if (statusButton) {
+		const rect = statusButton.getBoundingClientRect();
+		event.stopPropagation();
+		openStatusMenu(node, rect.left, rect.bottom + 2);
+	} else if (event.target.closest('[data-open], .card')) {
+		openDetail(node);
+	}
+});
+main.addEventListener('keydown', (event) => {
+	if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('card')) {
+		event.preventDefault();
+		openDetail(nodeOf(event.target));
+	}
+});
+main.addEventListener('dblclick', (event) => {
+	const cell = event.target.closest('tr.task td.d');
+	if (cell) { openStatusMenu(nodeOf(cell), event.clientX, event.clientY); }
+});
+main.addEventListener('dragstart', (event) => {
+	const card = event.target.closest?.('.card');
+	if (!card || state.readOnly) { return; }
+	event.dataTransfer.setData('text/plain', card.dataset.i);
+	event.dataTransfer.effectAllowed = 'move';
+	card.classList.add('dragging');
+});
+main.addEventListener('dragend', () => {
+	main.querySelectorAll('.dragging, .over').forEach((el) => el.classList.remove('dragging', 'over'));
+});
+main.addEventListener('dragover', (event) => {
+	const col = event.target.closest?.('.col');
+	if (!col || state.readOnly) { return; }
+	event.preventDefault();
+	event.dataTransfer.dropEffect = 'move';
+	main.querySelectorAll('.col.over').forEach((el) => { if (el !== col) { el.classList.remove('over'); } });
+	col.classList.add('over');
+});
+main.addEventListener('drop', (event) => {
+	const col = event.target.closest?.('.col');
+	if (!col || state.readOnly) { return; }
+	event.preventDefault();
+	col.classList.remove('over');
+	const task = state.nodes[Number(event.dataTransfer.getData('text/plain'))];
+	if (task && task.kind === 'task') { changeStatus(task, Number(col.dataset.status)); }
+});
+
+$('statusMenu').addEventListener('click', (event) => {
+	const button = event.target.closest('[data-to]');
+	const task = state.menuNode;
+	if (!button || !task) { return; }
+	closeStatusMenu();
+	changeStatus(task, Number(button.dataset.to));
+});
+document.addEventListener('click', (event) => {
+	if (!$('statusMenu').hidden && !event.target.closest('#statusMenu')) { closeStatusMenu(); }
+});
+document.addEventListener('keydown', (event) => {
+	if (event.key === 'Escape' && !$('statusMenu').hidden) { closeStatusMenu(); }
+});
+
+$('detailForm').addEventListener('submit', (event) => { event.preventDefault(); saveDetail(); });
+$('dClose').addEventListener('click', () => closeDetail(false));
+$('detail').addEventListener('cancel', (event) => { event.preventDefault(); closeDetail(false); });
+
+/* ---------- 起動 ---------- */
+
+try {
+	const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+	if (saved.view === 'wbs' || saved.view === 'kanban') { state.view = saved.view; }
+	if (typeof saved.scope === 'string') { state.scope = saved.scope; }
+	if (typeof saved.assignee === 'string') { state.assignee = saved.assignee; }
+} catch { /* 既定値で起動する */ }
+render();
+
+if (canWrite) {
+	handleStore('readonly', (store) => store.get('root')).then(async (root) => {
+		if (!root || state.source) { return; }
+		if (await root.queryPermission({ mode: 'readwrite' }) === 'granted') {
+			await openRoot(root);
+		} else {
+			state.remembered = root;
+			$('reconnectBtn').textContent = `前回のフォルダ「${root.name}」を再接続`;
+			$('reconnectBtn').hidden = false;
+		}
+	}).catch(() => { /* 記憶がなければ何もしない */ });
+}
+})();
+</script>
+</body>
+</html>
